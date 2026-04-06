@@ -36,15 +36,17 @@ internal sealed class SpawnSystem
     }
 
     /// <summary>
-    /// Pre-populate a large horde spread across the full depth range so the player
-    /// sees the vast crowd immediately on game start.
+    /// Pre-populate a horde at the far distance so the player sees the crowd
+    /// approaching from the horizon and has time to start firing.
     /// </summary>
     public void SpawnInitialHorde(GameState state)
     {
         const int count = 50;
         for (int i = 0; i < count; i++)
         {
-            float depth = 250f + (float)Rng.NextDouble() * (GameConstants.SpawnDepth - 250f);
+            // Spawn in the far band of the view (780–980 depth) so the horde
+            // is visible at a distance and walks toward the player
+            float depth = GameConstants.SpawnDepth - (float)Rng.NextDouble() * 200f;
             float x     = (float)(Rng.NextDouble() * 2.0 - 1.0)
                           * (GameConstants.WorldHalfWidth - GameConstants.EnemyRadius);
             state.Enemies.Add(new Enemy

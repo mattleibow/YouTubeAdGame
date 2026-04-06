@@ -17,13 +17,13 @@ public static class GameConstants
     public const float FarScale = 0.08f;
 
     // Player
-    public const float PlayerRadius = 28f;
+    public const float PlayerRadius = 18f;
     public const float PlayerSpeed = 350f;   // world-units / second
     public const float PlayerFireRate = 0.18f; // seconds between bullets
     public const float BulletSpeed = 900f;
 
     // Enemy
-    public const float EnemyRadius = 22f;
+    public const float EnemyRadius = 14f;
     public const float EnemySpeed = 90f;    // depth-units / second
     public const float EnemyFireRate = 3.0f;
     public const float EnemyBulletSpeed = 300f;
@@ -34,11 +34,11 @@ public static class GameConstants
     public const float BossSpeed = 60f;
 
     // Crowd
-    public const float CrowdMemberRadius = 14f;
-    public const float CrowdSpacingX = 32f;
-    public const float CrowdSpacingDepth = 18f;
-    public const int CrowdColumns = 7;
-    public const int MaxCrowdVisible = 60;
+    public const float CrowdMemberRadius = 9f;
+    public const float CrowdSpacingX = 20f;
+    public const float CrowdSpacingDepth = 12f;
+    public const int CrowdColumns = 10;
+    public const int MaxCrowdVisible = 300;
 
     // Gate
     public const float GateWidth = 100f;

@@ -248,23 +248,15 @@ public sealed class SkiaGameRenderer : IRenderer
         foreach (var enemy in sorted)
         {
             var (sx, sy, scale) = camera.Project(enemy.WorldX, enemy.Depth);
-            float r = enemy.Radius * scale;
+            float r = GameConstants.CrowdMemberRadius * scale;
 
             // Shadow
-            DrawShadow(canvas, sx, sy, r * 2f, r * 0.5f);
+            DrawShadow(canvas, sx, sy, r * 2f, r * 0.4f);
 
-            // Body
+            // Humanoid silhouette (mirrors the player crowd, red tint)
             _fillPaint.Color = ColEnemy;
-            canvas.DrawCircle(sx, sy - r, r, _fillPaint);
-
-            // Eyes
-            float eyeR = r * 0.22f;
-            _fillPaint.Color = SKColors.White;
-            canvas.DrawCircle(sx - r * 0.28f, sy - r * 1.25f, eyeR, _fillPaint);
-            canvas.DrawCircle(sx + r * 0.28f, sy - r * 1.25f, eyeR, _fillPaint);
-            _fillPaint.Color = SKColors.Black;
-            canvas.DrawCircle(sx - r * 0.28f, sy - r * 1.25f, eyeR * 0.5f, _fillPaint);
-            canvas.DrawCircle(sx + r * 0.28f, sy - r * 1.25f, eyeR * 0.5f, _fillPaint);
+            canvas.DrawCircle(sx, sy - r * 1.4f, r * 0.6f, _fillPaint);                                        // head
+            canvas.DrawRoundRect(sx - r * 0.5f, sy - r * 1.3f, r, r * 1.2f, r * 0.3f, r * 0.3f, _fillPaint); // torso
 
             float fog = Camera.FogAlpha(enemy.Depth);
             ApplyFog(canvas, sx - r, sy - r * 2f, r * 2f, r * 2f, fog);
