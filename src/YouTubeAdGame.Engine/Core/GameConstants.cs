@@ -24,7 +24,7 @@ public static class GameConstants
 
     // Enemy
     public const float EnemyRadius = 14f;
-    public const float EnemySpeed = 90f;    // depth-units / second
+    public const float EnemySpeed = 50f;    // depth-units / second
     public const float EnemyFireRate = 3.0f;
     public const float EnemyBulletSpeed = 300f;
 

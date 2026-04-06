@@ -17,9 +17,9 @@ internal sealed class SpawnSystem
         if (state.EnemySpawnTimer <= 0f)
         {
             SpawnZombieBatch(state);
-            // Use the runtime-adjustable interval; a small wave bonus keeps pressure rising
+            // Use the runtime-adjustable interval; wave pressure gradually increases spawn rate
             float interval = System.Math.Max(0.05f,
-                state.SpawnInterval - state.Wave * 0.002f);
+                state.SpawnInterval - state.Wave * 0.004f);
             state.EnemySpawnTimer = interval;
         }
 
@@ -60,7 +60,7 @@ internal sealed class SpawnSystem
             {
                 WorldX = x,
                 Depth  = GameConstants.SpawnDepth - depthJitter,
-                Speed  = GameConstants.EnemySpeed + (float)(Rng.NextDouble() * 20.0 - 10.0) + state.Wave * 2f
+                Speed  = GameConstants.EnemySpeed + (float)(Rng.NextDouble() * 10.0 - 5.0)
             });
         }
     }
@@ -97,26 +97,65 @@ internal sealed class SpawnSystem
 
     private static (GateOperation op, int operand) ChooseOperation(GameState state, bool leftLane)
     {
-        // Mix of operations based on crowd size
         int crowd = state.Crowd.Count;
+        int wave  = state.Wave;
 
-        GateOperation[] ops = crowd >= 20
-            ? [GateOperation.Add, GateOperation.Multiply, GateOperation.Subtract]
-            : [GateOperation.Add, GateOperation.Add, GateOperation.Multiply];
-
-        var op = ops[Rng.Next(ops.Length)];
-        int operand = op switch
-        {
-            GateOperation.Add      => Rng.Next(5, 25),
-            GateOperation.Subtract => Rng.Next(2, 10),
-            GateOperation.Multiply => Rng.Next(2, 4),
-            _                      => 0
-        };
-
-        // Occasionally offer gun upgrade on the left lane
-        if (leftLane && Rng.NextDouble() < 0.15)
+        // Gun upgrade chance scales up with wave (max 25%)
+        float gunChance = System.Math.Min(0.10f + wave * 0.02f, 0.25f);
+        if (leftLane && Rng.NextDouble() < gunChance)
             return (GateOperation.UpgradeGun, 0);
 
-        return (op, operand);
+        // Gate operands scale with wave: small values early, larger as game progresses
+        if (wave <= 2)
+        {
+            // Early game: only small additions and doubling
+            GateOperation[] ops = crowd <= 5
+                ? [GateOperation.Add, GateOperation.Add, GateOperation.Multiply]
+                : [GateOperation.Add, GateOperation.Multiply, GateOperation.Subtract];
+
+            var op = ops[Rng.Next(ops.Length)];
+            int operand = op switch
+            {
+                GateOperation.Add      => Rng.Next(1, 3),    // +1 or +2
+                GateOperation.Subtract => 1,                  // -1
+                GateOperation.Multiply => 2,                  // ×2
+                _                      => 0
+            };
+            return (op, operand);
+        }
+        else if (wave <= 5)
+        {
+            // Mid game: slightly larger gains
+            GateOperation[] ops = crowd >= 10
+                ? [GateOperation.Add, GateOperation.Multiply, GateOperation.Subtract]
+                : [GateOperation.Add, GateOperation.Add, GateOperation.Multiply];
+
+            var op = ops[Rng.Next(ops.Length)];
+            int operand = op switch
+            {
+                GateOperation.Add      => Rng.Next(2, 6),    // +2 to +5
+                GateOperation.Subtract => Rng.Next(1, 3),    // -1 or -2
+                GateOperation.Multiply => Rng.Next(2, 4),    // ×2 or ×3
+                _                      => 0
+            };
+            return (op, operand);
+        }
+        else
+        {
+            // Late game: current large-value behaviour
+            GateOperation[] ops = crowd >= 20
+                ? [GateOperation.Add, GateOperation.Multiply, GateOperation.Subtract]
+                : [GateOperation.Add, GateOperation.Add, GateOperation.Multiply];
+
+            var op = ops[Rng.Next(ops.Length)];
+            int operand = op switch
+            {
+                GateOperation.Add      => Rng.Next(5, 25),
+                GateOperation.Subtract => Rng.Next(2, 10),
+                GateOperation.Multiply => Rng.Next(2, 4),
+                _                      => 0
+            };
+            return (op, operand);
+        }
     }
 }

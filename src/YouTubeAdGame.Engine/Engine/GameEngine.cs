@@ -27,7 +27,7 @@ public sealed class GameEngine(IInputProvider input)
         state.Player.GunLevel = 0;
         state.Player.VelocityX = 0;
         state.Player.HitFlashTimer = 0;
-        state.Crowd.Count = 20;
+        state.Crowd.Count = 1;
         state.Enemies.Clear();
         state.PlayerBullets.Clear();
         state.EnemyBullets.Clear();

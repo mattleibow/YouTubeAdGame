@@ -16,9 +16,9 @@
 
 The player commands a **crowd of soldiers** marching down the road toward an endless **horde of zombies**.
 
-- **Soldiers** (the player's crowd): automatically fire bullets — the more soldiers, the more bullets and the wider the spread. Gun-level gates multiply bullet density further. Soldiers are the "lives" — lose them all and it's game over.
-- **Zombies** (enemies): shuffle slowly toward the player. They **never fire**. When a zombie reaches the player they consume one soldier and die.
-- Gates on the road offer math operations (`+`, `-`, `×`) to gain/lose soldiers, or gun upgrades.
+- **Soldiers** (the player's crowd): automatically fire bullets — the more soldiers, the more bullets and the wider the spread. Gun-level gates multiply bullet density further. Soldiers are the "lives" — lose them all and it's game over. The player **starts with 1 soldier** and builds up through gates.
+- **Zombies** (enemies): shuffle toward the player at a constant base speed. They **never fire**. When a zombie reaches the player they consume one soldier and die.
+- Gates on the road offer math operations (`+1`, `+2`, `×2` in early waves; larger in later waves) to gain/lose soldiers, or gun upgrades. Gate rewards scale with the current wave.
 
 ## Repository Structure
 
@@ -71,7 +71,20 @@ Zombies spawn in **batches** (`GameConstants.ZombiesPerSpawn = 8`) every `state.
 
 - `state.MaxEnemiesOnScreen` (default 500, max slider 1–1000) caps the total zombie count.
 - `state.SpawnInterval` (default 0.1 s, slider range 50–2000 ms) is runtime-adjustable via the inspector.
-- Wave progression reduces the effective interval slightly: `max(0.05s, SpawnInterval - Wave × 0.002s)`.
+- Wave progression increases spawn pressure: `max(0.05s, SpawnInterval - Wave × 0.004s)`.
+- All zombies move at the same base speed (`EnemySpeed = 50` ± small random jitter) — no per-wave speed bonus, so movement is visually consistent.
+
+### Wave Progression & Gate Rewards
+
+The wave advances based on distance: `Wave = 1 + int(Distance / 1800)`. Gate operands scale with wave:
+
+| Wave | Add | Multiply | Subtract | Gun upgrade chance |
+|------|-----|----------|----------|--------------------|
+| 1–2  | +1 or +2 | ×2 | -1 | 12–14% |
+| 3–5  | +2 to +5 | ×2 or ×3 | -1 or -2 | 16–20% |
+| 6+   | +5 to +24 | ×2 or ×3 | -2 to -9 | 22–25% |
+
+Subtract gates appear only when the crowd is large enough (≥10 in mid/late game). Gun upgrades are offered only on the left-lane gate, with a chance that scales up each wave.
 
 ### Crowd-Based Firing & Collision
 
