@@ -1,0 +1,6 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/YouTubeAdGame.Engine/YouTubeAdGame.Engine.csproj" />
+    <Project Path="src/YouTubeAdGame.Web/YouTubeAdGame.Web.csproj" />
+  </Folder>
+</Solution>

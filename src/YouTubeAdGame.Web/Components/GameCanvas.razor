@@ -1,0 +1,156 @@
+@using SkiaSharp
+@using SkiaSharp.Views.Blazor
+@using YouTubeAdGame.Engine.Core
+@using YouTubeAdGame.Engine.Engine
+@using YouTubeAdGame.Engine.Rendering
+@using YouTubeAdGame.Web.Input
+
+@implements IAsyncDisposable
+
+<div class="game-container"
+     tabindex="0"
+     @onkeydown="OnKeyDown"
+     @onkeyup="OnKeyUp"
+     @onkeydown:preventDefault="true"
+     @ontouchstart="OnTouchStart"
+     @ontouchmove="OnTouchMove"
+     @ontouchend="OnTouchEnd"
+     @ontouchstart:preventDefault="true"
+     @ontouchmove:preventDefault="true"
+     @onmousedown="OnMouseDown"
+     @onmousemove="OnMouseMove"
+     @onmouseup="OnMouseUp"
+     @ref="_containerRef">
+
+    <SKCanvasView @ref="_canvasView"
+                  class="game-canvas"
+                  OnPaintSurface="OnPaintSurface"
+                  EnableRenderLoop="false"
+                  IgnorePixelScaling="false" />
+</div>
+
+@code {
+    // ── Dependencies ──────────────────────────────────────────────────────
+    private readonly GameState          _state    = new();
+    private readonly BlazorInputProvider _input   = new();
+    private GameEngine?                 _engine;
+    private SkiaGameRenderer?           _renderer;
+    private SKCanvasView?               _canvasView;
+    private ElementReference            _containerRef;
+
+    // ── Game loop ─────────────────────────────────────────────────────────
+    private PeriodicTimer?   _timer;
+    private CancellationTokenSource _cts = new();
+
+    protected override void OnInitialized()
+    {
+        _renderer = new SkiaGameRenderer();
+        _engine   = new GameEngine(_input);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        // Start 60 Hz game loop
+        _timer = new PeriodicTimer(TimeSpan.FromMilliseconds(1000.0 / 60.0));
+        _ = RunGameLoopAsync(_cts.Token);
+
+        // Give the container focus so keyboard events work
+        await JS.InvokeVoidAsync("focusElement", _containerRef);
+    }
+
+    [Inject] private IJSRuntime JS { get; set; } = default!;
+
+    private async Task RunGameLoopAsync(CancellationToken ct)
+    {
+        while (!ct.IsCancellationRequested && _timer is not null)
+        {
+            try
+            {
+                await _timer.WaitForNextTickAsync(ct);
+            }
+            catch (OperationCanceledException)
+            {
+                break;
+            }
+
+            _engine?.Update(_state, (float)GameConstants.FixedDeltaTime);
+            _canvasView?.Invalidate();
+        }
+    }
+
+    // ── Rendering ─────────────────────────────────────────────────────────
+
+    private void OnPaintSurface(SKPaintSurfaceEventArgs e)
+    {
+        var canvas = e.Surface.Canvas;
+        canvas.Clear(SKColors.Black);
+
+        _state.ViewportWidth  = e.Info.Width;
+        _state.ViewportHeight = e.Info.Height;
+
+        _renderer?.Render(canvas, _state);
+    }
+
+    // ── Input ─────────────────────────────────────────────────────────────
+
+    private void HandleTap(float x, float y)
+    {
+        _input.OnPointerDown(x, y, _state.ViewportWidth);
+
+        if (_state.Phase is GamePhase.Menu or GamePhase.GameOver or GamePhase.Victory)
+        {
+            _engine?.StartGame(_state);
+        }
+    }
+
+    private void OnMouseDown(MouseEventArgs e) =>
+        HandleTap((float)e.OffsetX, (float)e.OffsetY);
+
+    private void OnMouseMove(MouseEventArgs e)
+    {
+        if (e.Buttons == 1)  // left button held
+            _input.OnPointerMove((float)e.OffsetX, (float)e.OffsetY, _state.ViewportWidth);
+    }
+
+    private void OnMouseUp(MouseEventArgs e) => _input.OnPointerUp();
+
+    private void OnTouchStart(TouchEventArgs e)
+    {
+        if (e.Touches.Length == 0) return;
+        var t = e.Touches[0];
+        HandleTap((float)t.ClientX, (float)t.ClientY);
+    }
+
+    private void OnTouchMove(TouchEventArgs e)
+    {
+        if (e.Touches.Length == 0) return;
+        var t = e.Touches[0];
+        _input.OnPointerMove((float)t.ClientX, (float)t.ClientY, _state.ViewportWidth);
+    }
+
+    private void OnTouchEnd(TouchEventArgs e) => _input.OnPointerUp();
+
+    private void OnKeyDown(KeyboardEventArgs e)
+    {
+        _input.OnKeyDown(e.Key);
+        if (e.Key is " " or "Enter")
+        {
+            if (_state.Phase is GamePhase.Menu or GamePhase.GameOver or GamePhase.Victory)
+                _engine?.StartGame(_state);
+        }
+    }
+
+    private void OnKeyUp(KeyboardEventArgs e) => _input.OnKeyUp(e.Key);
+
+    // ── Lifecycle ─────────────────────────────────────────────────────────
+
+    public async ValueTask DisposeAsync()
+    {
+        await _cts.CancelAsync();
+        _cts.Dispose();
+        _timer?.Dispose();
+        _renderer?.Dispose();
+    }
+}
