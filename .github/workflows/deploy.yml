@@ -5,6 +5,7 @@ on:
     branches: [main, master]
   pull_request:
     branches: [main, master]
+    types: [opened, synchronize, reopened, labeled]
   workflow_dispatch:
 
 # Grant write access to GitHub Pages deployment
