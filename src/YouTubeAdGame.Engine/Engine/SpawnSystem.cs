@@ -17,9 +17,9 @@ internal sealed class SpawnSystem
         if (state.EnemySpawnTimer <= 0f)
         {
             SpawnEnemyWave(state);
-            // Gradually reduce interval as waves progress
-            float interval = System.Math.Max(0.8f,
-                GameConstants.SpawnInterval - state.Wave * 0.1f);
+            // Gradually reduce interval as waves progress, minimum 0.5 s
+            float interval = System.Math.Max(0.5f,
+                GameConstants.SpawnInterval - state.Wave * 0.05f);
             state.EnemySpawnTimer = interval;
         }
 
@@ -35,25 +35,51 @@ internal sealed class SpawnSystem
         state.Wave = 1 + (int)(state.Distance / 1800f);
     }
 
+    /// <summary>
+    /// Pre-populate a large horde spread across the full depth range so the player
+    /// sees the vast crowd immediately on game start.
+    /// </summary>
+    public void SpawnInitialHorde(GameState state)
+    {
+        const int count = 50;
+        for (int i = 0; i < count; i++)
+        {
+            float depth = 250f + (float)Rng.NextDouble() * (GameConstants.SpawnDepth - 250f);
+            float x     = (float)(Rng.NextDouble() * 2.0 - 1.0)
+                          * (GameConstants.WorldHalfWidth - GameConstants.EnemyRadius);
+            state.Enemies.Add(new Enemy
+            {
+                WorldX = x,
+                Depth  = depth,
+                Speed  = GameConstants.EnemySpeed + (float)(Rng.NextDouble() * 20.0 - 10.0)
+            });
+        }
+    }
+
     private static void SpawnEnemyWave(GameState state)
     {
-        int count = 1 + (int)(state.Wave * 0.5f);
-        count = System.Math.Min(count, 5);
+        // Scale horde size with wave — starts large, keeps growing
+        int desired = System.Math.Min(10 + state.Wave * 3, 30);
+
+        // Respect the on-screen cap so we don't flood the engine
+        int available = GameConstants.MaxEnemiesOnScreen - state.Enemies.Count;
+        int count = System.Math.Min(desired, available);
+        if (count <= 0) return;
 
         for (int i = 0; i < count; i++)
         {
             float x = (float)(Rng.NextDouble() * 2.0 - 1.0)
                       * (GameConstants.WorldHalfWidth - GameConstants.EnemyRadius);
+            // Stagger enemies at different depths so they arrive in waves, not a wall
+            float depthJitter = (float)(Rng.NextDouble() * 150.0);
             state.Enemies.Add(new Enemy
             {
                 WorldX = x,
-                Depth  = GameConstants.SpawnDepth - i * 60f,
-                Speed  = GameConstants.EnemySpeed + Rng.Next(0, state.Wave * 10)
+                Depth  = GameConstants.SpawnDepth - depthJitter,
+                // Small random ±10 speed variation around the base, always valid
+                Speed  = GameConstants.EnemySpeed + (float)(Rng.NextDouble() * 20.0 - 10.0) + state.Wave * 2f
             });
         }
-
-        // Spawn a boss every 5 waves (not yet fully implemented — placeholder)
-        // if (state.Wave % 5 == 0) SpawnBoss(state);
     }
 
     private static void SpawnGatePair(GameState state)

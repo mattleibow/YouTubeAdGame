@@ -6,7 +6,7 @@ public static class GameConstants
     // World dimensions (logical units)
     public const float WorldHalfWidth = 300f;
     public const float MaxDepth = 1000f;
-    public const float PlayerDepth = 60f;   // depth at which the player sits
+    public const float PlayerDepth = 150f;  // depth at which the player sits
 
     // Pseudo-3D camera fractions (0–1 of viewport height)
     public const float HorizonFraction = 0.32f;   // where the road vanishes
@@ -18,14 +18,14 @@ public static class GameConstants
 
     // Player
     public const float PlayerRadius = 28f;
-    public const float PlayerSpeed = 220f;   // world-units / second
-    public const float PlayerFireRate = 0.22f; // seconds between bullets
-    public const float BulletSpeed = 800f;
+    public const float PlayerSpeed = 350f;   // world-units / second
+    public const float PlayerFireRate = 0.18f; // seconds between bullets
+    public const float BulletSpeed = 900f;
 
     // Enemy
     public const float EnemyRadius = 22f;
-    public const float EnemySpeed = 120f;   // depth-units / second
-    public const float EnemyFireRate = 2.0f;
+    public const float EnemySpeed = 90f;    // depth-units / second
+    public const float EnemyFireRate = 3.0f;
     public const float EnemyBulletSpeed = 300f;
 
     // Boss
@@ -35,10 +35,10 @@ public static class GameConstants
 
     // Crowd
     public const float CrowdMemberRadius = 14f;
-    public const float CrowdSpacingX = 38f;
-    public const float CrowdSpacingDepth = 32f;
-    public const int CrowdColumns = 5;
-    public const int MaxCrowdVisible = 25;
+    public const float CrowdSpacingX = 32f;
+    public const float CrowdSpacingDepth = 18f;
+    public const int CrowdColumns = 7;
+    public const int MaxCrowdVisible = 60;
 
     // Gate
     public const float GateWidth = 100f;
@@ -51,6 +51,7 @@ public static class GameConstants
 
     // Spawn
     public const float SpawnDepth = MaxDepth - 20f;
-    public const float SpawnInterval = 2.5f;   // seconds between enemy waves
+    public const float SpawnInterval = 1.2f;   // seconds between enemy waves
     public const float GateSpawnInterval = 4.0f;
+    public const int MaxEnemiesOnScreen = 80;  // cap on simultaneous enemies
 }

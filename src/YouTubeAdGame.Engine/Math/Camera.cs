@@ -42,9 +42,11 @@ public readonly record struct Camera(float Width, float Height)
         // Scale: large near the camera, tiny at the horizon
         float scale = MathHelper.Lerp(Core.GameConstants.NearScale, Core.GameConstants.FarScale, t);
 
-        // Perspective X: world X converges toward the vanishing point
-        float worldWidthAtDepth = Core.GameConstants.WorldHalfWidth * (1f - t * 0.92f);
-        float screenHalfWidth   = (Width * 0.5f) * (1f - t * 0.08f);
+        // Perspective X: world X converges toward the vanishing point.
+        // At depth 0 (near) objects span the full road width (Width * 0.5 from centre).
+        // At depth MaxDepth (horizon) they converge to the road vanishing point (Width * 0.06
+        // from centre) matching the trapezoid drawn by DrawRoad.
+        float screenHalfWidth = MathHelper.Lerp(Width * 0.5f, Width * 0.06f, t);
         float screenX = CenterX + worldX * (screenHalfWidth / Core.GameConstants.WorldHalfWidth);
 
         return (screenX, screenY, scale);

@@ -27,7 +27,7 @@ public sealed class GameEngine(IInputProvider input)
         state.Player.GunLevel = 0;
         state.Player.VelocityX = 0;
         state.Player.HitFlashTimer = 0;
-        state.Crowd.Count = 10;
+        state.Crowd.Count = 20;
         state.Enemies.Clear();
         state.PlayerBullets.Clear();
         state.EnemyBullets.Clear();
@@ -38,6 +38,8 @@ public sealed class GameEngine(IInputProvider input)
         state.EnemySpawnTimer = 0;
         state.GateSpawnTimer  = GameConstants.GateSpawnInterval * 0.5f;
         state.PlayerFireTimer = 0;
+
+        _spawn.SpawnInitialHorde(state);
     }
 
     /// <summary>
@@ -66,9 +68,9 @@ public sealed class GameEngine(IInputProvider input)
     {
         var player = state.Player;
 
-        // Horizontal movement
-        const float accel = 800f;
-        const float drag  = 0.85f;
+        // Horizontal movement — acceleration + drag tuned for ~PlayerSpeed terminal velocity
+        const float accel = 2000f;
+        const float drag  = 0.95f;
 
         player.VelocityX += inputState.HorizontalAxis * accel * dt;
         player.VelocityX *= drag;
@@ -215,6 +217,7 @@ public sealed class GameEngine(IInputProvider input)
                 {
                     enemy.IsDestroyed = true;
                     state.Score += 50;
+                    state.Crowd.Count++;   // each kill earns one crowd member
                     SpawnDeathEffects(state, enemy);
                 }
                 break;
@@ -287,7 +290,8 @@ public sealed class GameEngine(IInputProvider input)
 
     private static void CheckEndConditions(GameState state)
     {
-        if (state.Crowd.IsEmpty && state.Player.Health <= 0)
+        // Game over if the crowd is wiped out (overrun) or the player is killed
+        if (state.Crowd.IsEmpty || state.Player.Health <= 0)
             state.Phase = GamePhase.GameOver;
     }
 }
