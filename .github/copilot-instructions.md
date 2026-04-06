@@ -73,7 +73,7 @@ Zombies spawn in **batches** (`GameConstants.ZombiesPerSpawn = 8`) every `state.
 - `state.SpawnInterval` (default 0.1 s, slider range 50–2000 ms) is runtime-adjustable via the inspector.
 - Wave progression reduces the effective interval slightly: `max(0.05s, SpawnInterval - Wave × 0.002s)`.
 
-### Crowd-Based Firing
+### Crowd-Based Firing & Collision
 
 The player's soldiers fire automatically every `PlayerFireRate` seconds. Bullet count scales with crowd size:
 
@@ -82,6 +82,8 @@ count = min(Crowd.Count / 5 × (1 + GunLevel × 0.5), 50)
 ```
 
 Bullets are spread uniformly across `±CrowdHalfWidth` world-units centred on the player. Gun-level gates increase bullet density. There are **no enemy bullets** — zombies only move.
+
+**Bullet–zombie collision:** each bullet is consumed on the first hit (one bullet kills one zombie). Bullets do **not** pass through enemies. Killing a zombie awards score points but does **not** add soldiers — the only way to gain soldiers is through gates.
 
 ### Player / Crowd Boundary
 

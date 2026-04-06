@@ -205,7 +205,6 @@ public sealed class GameEngine(IInputProvider input)
                 {
                     enemy.IsDestroyed = true;
                     state.Score += 50;
-                    state.Crowd.Count++;   // each kill earns one crowd member
                     SpawnDeathEffects(state, enemy);
                 }
                 break;
