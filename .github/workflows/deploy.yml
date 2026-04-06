@@ -78,12 +78,14 @@ jobs:
         with:
           path: ${{ env.PUBLISH_DIR }}/wwwroot
 
-  # ── Deploy (only on push to main/master) ─────────────────────────────────
+  # ── Deploy (on push to main/master, or on PRs labelled "deploy") ─────────
   deploy:
     name: Deploy to GitHub Pages
     needs: build
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+    if: |
+      (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')) ||
+      (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'deploy'))
 
     environment:
       name: github-pages

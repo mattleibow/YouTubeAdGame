@@ -122,12 +122,20 @@ html, body {
     touch-action: none;
 }
 
+.page-layout {
+    display: flex;
+    flex-direction: row;
+    width: 100vw;
+    height: 100dvh;
+    align-items: stretch;
+}
+
 .game-container {
     display: flex;
     justify-content: center;
     align-items: center;
-    width: 100vw;
-    height: 100dvh;
+    flex: 1;
+    min-width: 0;
     outline: none;
     touch-action: none;
     user-select: none;
@@ -135,9 +143,68 @@ html, body {
 
 .game-canvas {
     /* Keep the canvas at a comfortable 9:16 portrait aspect ratio, max height */
-    width: min(100vw, calc(100dvh * 9 / 16));
-    height: min(100dvh, calc(100vw * 16 / 9));
+    width: min(100%, calc(100dvh * 9 / 16));
+    height: min(100dvh, calc(100% * 16 / 9));
     display: block;
     touch-action: none;
     cursor: none;
+}
+
+/* ── Debug inspector panel ── */
+.inspector-panel {
+    width: 200px;
+    flex-shrink: 0;
+    background: #0d0d1a;
+    border-left: 1px solid #2a2a4a;
+    color: #b0b8d0;
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+    padding: 10px 12px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.inspector-title {
+    font-size: 13px;
+    font-weight: bold;
+    color: #7eb8ff;
+    margin-bottom: 6px;
+    letter-spacing: 0.05em;
+}
+
+.inspector-divider {
+    height: 1px;
+    background: #2a2a4a;
+    margin: 6px 0;
+}
+
+.inspector-section {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+}
+
+.inspector-label {
+    color: #7a8aaa;
+    margin-bottom: 2px;
+}
+
+.inspector-value {
+    color: #e8f0ff;
+    font-weight: bold;
+}
+
+.inspector-slider {
+    width: 100%;
+    margin: 4px 0;
+    accent-color: #7eb8ff;
+}
+
+.inspector-hint {
+    color: #50587a;
+    font-size: 10px;
+    line-height: 1.4;
+    margin-top: 2px;
 }

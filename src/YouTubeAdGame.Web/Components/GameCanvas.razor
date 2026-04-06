@@ -7,26 +7,85 @@
 
 @implements IAsyncDisposable
 
-<div class="game-container"
-     tabindex="0"
-     @onkeydown="OnKeyDown"
-     @onkeyup="OnKeyUp"
-     @onkeydown:preventDefault="true"
-     @ontouchstart="OnTouchStart"
-     @ontouchmove="OnTouchMove"
-     @ontouchend="OnTouchEnd"
-     @ontouchstart:preventDefault="true"
-     @ontouchmove:preventDefault="true"
-     @onmousedown="OnMouseDown"
-     @onmousemove="OnMouseMove"
-     @onmouseup="OnMouseUp"
-     @ref="_containerRef">
+<div class="page-layout">
 
-    <SKCanvasView @ref="_canvasView"
-                  class="game-canvas"
-                  OnPaintSurface="OnPaintSurface"
-                  EnableRenderLoop="false"
-                  IgnorePixelScaling="false" />
+    <div class="game-container"
+         tabindex="0"
+         @onkeydown="OnKeyDown"
+         @onkeyup="OnKeyUp"
+         @onkeydown:preventDefault="true"
+         @ontouchstart="OnTouchStart"
+         @ontouchmove="OnTouchMove"
+         @ontouchend="OnTouchEnd"
+         @ontouchstart:preventDefault="true"
+         @ontouchmove:preventDefault="true"
+         @onmousedown="OnMouseDown"
+         @onmousemove="OnMouseMove"
+         @onmouseup="OnMouseUp"
+         @ref="_containerRef">
+
+        <SKCanvasView @ref="_canvasView"
+                      class="game-canvas"
+                      OnPaintSurface="OnPaintSurface"
+                      EnableRenderLoop="false"
+                      IgnorePixelScaling="false" />
+    </div>
+
+    <div class="inspector-panel">
+        <div class="inspector-title">🔍 Inspector</div>
+
+        <div class="inspector-section">
+            <div class="inspector-label">Phase</div>
+            <div class="inspector-value">@_state.Phase</div>
+        </div>
+        <div class="inspector-section">
+            <div class="inspector-label">Wave</div>
+            <div class="inspector-value">@_state.Wave</div>
+        </div>
+        <div class="inspector-section">
+            <div class="inspector-label">Score</div>
+            <div class="inspector-value">@_state.Score</div>
+        </div>
+        <div class="inspector-section">
+            <div class="inspector-label">Distance</div>
+            <div class="inspector-value">@((int)_state.Distance)</div>
+        </div>
+
+        <div class="inspector-divider"></div>
+
+        <div class="inspector-section">
+            <div class="inspector-label">👥 Player crowd</div>
+            <div class="inspector-value">@_state.Crowd.Count</div>
+        </div>
+        <div class="inspector-section">
+            <div class="inspector-label">👹 Enemies</div>
+            <div class="inspector-value">@_state.Enemies.Count</div>
+        </div>
+        <div class="inspector-section">
+            <div class="inspector-label">🔵 Player bullets</div>
+            <div class="inspector-value">@_state.PlayerBullets.Count</div>
+        </div>
+        <div class="inspector-section">
+            <div class="inspector-label">🔴 Enemy bullets</div>
+            <div class="inspector-value">@_state.EnemyBullets.Count</div>
+        </div>
+        <div class="inspector-section">
+            <div class="inspector-label">💥 Particles</div>
+            <div class="inspector-value">@_state.Particles.Count</div>
+        </div>
+
+        <div class="inspector-divider"></div>
+
+        <div class="inspector-label">Max enemies: @_state.MaxEnemiesOnScreen</div>
+        <input type="range"
+               class="inspector-slider"
+               min="1" max="300"
+               value="@_state.MaxEnemiesOnScreen"
+               @oninput="OnMaxEnemiesChanged" />
+
+        <div class="inspector-hint">Slide to change the enemy cap in real-time.</div>
+    </div>
+
 </div>
 
 @code {
@@ -41,6 +100,7 @@
     // ── Game loop ─────────────────────────────────────────────────────────
     private PeriodicTimer?   _timer;
     private CancellationTokenSource _cts = new();
+    private int _frameCount;
 
     protected override void OnInitialized()
     {
@@ -77,6 +137,11 @@
 
             _engine?.Update(_state, (float)GameConstants.FixedDeltaTime);
             _canvasView?.Invalidate();
+
+            // Refresh the inspector panel ~6× per second (every 10 frames)
+            _frameCount++;
+            if (_frameCount % 10 == 0)
+                await InvokeAsync(StateHasChanged);
         }
     }
 
@@ -143,6 +208,14 @@
     }
 
     private void OnKeyUp(KeyboardEventArgs e) => _input.OnKeyUp(e.Key);
+
+    // ── Inspector ─────────────────────────────────────────────────────────
+
+    private void OnMaxEnemiesChanged(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out int value))
+            _state.MaxEnemiesOnScreen = value;
+    }
 
     // ── Lifecycle ─────────────────────────────────────────────────────────
 

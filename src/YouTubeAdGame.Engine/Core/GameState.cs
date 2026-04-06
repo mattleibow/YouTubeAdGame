@@ -47,6 +47,10 @@ public sealed class GameState
     public float GateSpawnTimer { get; set; }
     public float PlayerFireTimer { get; set; }
 
+    // ── Runtime tuning (adjustable via debug inspector) ──────────────────────
+    /// <summary>Maximum simultaneous enemies on screen. Adjustable at runtime.</summary>
+    public int MaxEnemiesOnScreen { get; set; } = GameConstants.MaxEnemiesOnScreen;
+
     // ── Viewport (set by renderer) ──────────────────────────────────────────
     public float ViewportWidth { get; set; } = 400f;
     public float ViewportHeight { get; set; } = 700f;

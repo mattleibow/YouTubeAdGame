@@ -36,52 +36,26 @@ internal sealed class SpawnSystem
     }
 
     /// <summary>
-    /// Pre-populate a horde at the far distance so the player sees the crowd
-    /// approaching from the horizon and has time to start firing.
+    /// No initial horde — enemies stream in one at a time from the horizon.
     /// </summary>
     public void SpawnInitialHorde(GameState state)
     {
-        const int count = 50;
-        for (int i = 0; i < count; i++)
-        {
-            // Spawn in the far band of the view (780–980 depth) so the horde
-            // is visible at a distance and walks toward the player
-            float depth = GameConstants.SpawnDepth - (float)Rng.NextDouble() * 200f;
-            float x     = (float)(Rng.NextDouble() * 2.0 - 1.0)
-                          * (GameConstants.WorldHalfWidth - GameConstants.EnemyRadius);
-            state.Enemies.Add(new Enemy
-            {
-                WorldX = x,
-                Depth  = depth,
-                Speed  = GameConstants.EnemySpeed + (float)(Rng.NextDouble() * 20.0 - 10.0)
-            });
-        }
+        // Intentionally empty: the horde streams in via SpawnEnemyWave.
     }
 
     private static void SpawnEnemyWave(GameState state)
     {
-        // Scale horde size with wave — starts large, keeps growing
-        int desired = System.Math.Min(10 + state.Wave * 3, 30);
+        // Stream in one enemy at a time, respecting the runtime-adjustable cap
+        if (state.Enemies.Count >= state.MaxEnemiesOnScreen) return;
 
-        // Respect the on-screen cap so we don't flood the engine
-        int available = GameConstants.MaxEnemiesOnScreen - state.Enemies.Count;
-        int count = System.Math.Min(desired, available);
-        if (count <= 0) return;
-
-        for (int i = 0; i < count; i++)
+        float x = (float)(Rng.NextDouble() * 2.0 - 1.0)
+                  * (GameConstants.WorldHalfWidth - GameConstants.EnemyRadius);
+        state.Enemies.Add(new Enemy
         {
-            float x = (float)(Rng.NextDouble() * 2.0 - 1.0)
-                      * (GameConstants.WorldHalfWidth - GameConstants.EnemyRadius);
-            // Stagger enemies at different depths so they arrive in waves, not a wall
-            float depthJitter = (float)(Rng.NextDouble() * 150.0);
-            state.Enemies.Add(new Enemy
-            {
-                WorldX = x,
-                Depth  = GameConstants.SpawnDepth - depthJitter,
-                // Small random ±10 speed variation around the base, always valid
-                Speed  = GameConstants.EnemySpeed + (float)(Rng.NextDouble() * 20.0 - 10.0) + state.Wave * 2f
-            });
-        }
+            WorldX = x,
+            Depth  = GameConstants.SpawnDepth,
+            Speed  = GameConstants.EnemySpeed + (float)(Rng.NextDouble() * 20.0 - 10.0) + state.Wave * 2f
+        });
     }
 
     private static void SpawnGatePair(GameState state)
