@@ -12,6 +12,14 @@
 - **SkiaSharp 3.x** for all rendering (2D canvas with perspective projection)
 - No game framework — all engine logic is hand-written in C#
 
+### Core Concept — Army vs Zombies
+
+The player commands a **crowd of soldiers** marching down the road toward an endless **horde of zombies**.
+
+- **Soldiers** (the player's crowd): automatically fire bullets — the more soldiers, the more bullets and the wider the spread. Gun-level gates multiply bullet density further. Soldiers are the "lives" — lose them all and it's game over.
+- **Zombies** (enemies): shuffle slowly toward the player. They **never fire**. When a zombie reaches the player they consume one soldier and die.
+- Gates on the road offer math operations (`+`, `-`, `×`) to gain/lose soldiers, or gun upgrades.
+
 ## Repository Structure
 
 ```
@@ -57,11 +65,27 @@ Objects carry a **depth** value (0 = at the player, 1000 = horizon). `Camera.cs`
 - `scale`   = lerp(NearScale, FarScale, t)
 - `screenX` = centreX + worldX × (screenHalfWidth / worldHalfWidth)
 
-### Enemy Spawning — Streaming Model
+### Zombie Spawning — Sea-of-Zombies Model
 
-Enemies **stream in one at a time every second** from the far horizon (`SpawnDepth`). The field starts empty at game start — there is no initial horde dump. The spawn timer fires every `SpawnInterval` seconds and adds a single enemy if `state.Enemies.Count < state.MaxEnemiesOnScreen`.
+Zombies spawn in **batches** (`GameConstants.ZombiesPerSpawn = 8`) every `state.SpawnInterval` seconds (default 100 ms) from the far horizon (`SpawnDepth`). Each zombie in the batch gets a slight random depth jitter so they don't all appear on the same line. The field builds up rapidly into a sea effect.
 
-`state.MaxEnemiesOnScreen` is a **runtime-adjustable** property (default: `GameConstants.MaxEnemiesOnScreen = 80`) that can be changed via the debug inspector slider without restarting.
+- `state.MaxEnemiesOnScreen` (default 500, max slider 1–1000) caps the total zombie count.
+- `state.SpawnInterval` (default 0.1 s, slider range 50–2000 ms) is runtime-adjustable via the inspector.
+- Wave progression reduces the effective interval slightly: `max(0.05s, SpawnInterval - Wave × 0.002s)`.
+
+### Crowd-Based Firing
+
+The player's soldiers fire automatically every `PlayerFireRate` seconds. Bullet count scales with crowd size:
+
+```
+count = min(Crowd.Count / 5 × (1 + GunLevel × 0.5), 50)
+```
+
+Bullets are spread uniformly across `±CrowdHalfWidth` world-units centred on the player. Gun-level gates increase bullet density. There are **no enemy bullets** — zombies only move.
+
+### Player / Crowd Boundary
+
+The player's horizontal position is clamped to `±(WorldHalfWidth − CrowdHalfWidth)` so the entire crowd formation stays within road edges at all times.
 
 ### Debug Inspector Panel
 
@@ -70,12 +94,14 @@ Enemies **stream in one at a time every second** from the far horizon (`SpawnDep
 | Stat | Description |
 |------|-------------|
 | Phase / Wave / Score / Distance | Overall game progression |
-| 👥 Player crowd | `state.Crowd.Count` |
-| 👹 Enemies | `state.Enemies.Count` |
-| 🔵 Player bullets | `state.PlayerBullets.Count` |
-| 🔴 Enemy bullets | `state.EnemyBullets.Count` |
-| 💥 Particles | `state.Particles.Count` |
-| Max enemies slider | Mutates `state.MaxEnemiesOnScreen` in real time (1–300) |
+| Soldiers | `state.Crowd.Count` |
+| Zombies | `state.Enemies.Count` |
+| Bullets | `state.PlayerBullets.Count` |
+| Particles | `state.Particles.Count` |
+| Max zombies slider | Mutates `state.MaxEnemiesOnScreen` in real time (1–1000) |
+| Spawn delay slider | Mutates `state.SpawnInterval` in real time (50–2000 ms) |
+
+Inspector labels use plain ASCII — no emoji (default SkiaSharp font does not support emoji).
 
 Stats refresh every 10 game frames (~6 Hz) via `InvokeAsync(StateHasChanged)`.  
 Layout: `.page-layout` flex row → `.game-container` (flex: 1) + `.inspector-panel` (200 px fixed width).
@@ -113,7 +139,7 @@ This means you can preview any PR branch on GitHub Pages simply by adding the `d
 | `Core/IRenderer.cs` | Rendering abstraction |
 | `Math/Camera.cs` | Pseudo-3D projection math |
 | `Engine/GameEngine.cs` | Fixed-timestep update, collision, end-conditions |
-| `Engine/SpawnSystem.cs` | Enemy streaming (1/s) and gate spawning |
+| `Engine/SpawnSystem.cs` | Zombie batch spawning and gate spawning |
 | `Rendering/SkiaGameRenderer.cs` | Full scene rendering |
 | `Components/GameCanvas.razor` | 60 Hz loop, SKCanvasView wiring, debug inspector panel |
 | `Input/BlazorInputProvider.cs` | Browser input → `IInputProvider` |
@@ -138,7 +164,7 @@ dotnet run --project src/YouTubeAdGame.Web
 | New gate operation | `Objects/Gate.cs` `GateOperation` enum |
 | New visual effect | `Effects/` + `Rendering/SkiaGameRenderer.cs` |
 | New debug stat | Add to inspector HTML in `GameCanvas.razor` |
-| New runtime tuning knob | Add mutable property to `GameState` (default from `GameConstants`); wire up a slider/toggle in the inspector |
+| New runtime tuning knob | Add mutable property to `GameState` (default from `GameConstants`); wire up a slider/toggle in the inspector (use ASCII labels — no emoji) |
 | Sound | New `IAudioProvider` abstraction in `Core/`, implement per platform |
 | MAUI / desktop port | Implement `IRenderer` + `IInputProvider` in a new project |
 
