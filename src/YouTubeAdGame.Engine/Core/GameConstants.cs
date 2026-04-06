@@ -35,10 +35,12 @@ public static class GameConstants
 
     // Crowd
     public const float CrowdMemberRadius = 9f;
-    public const float CrowdSpacingX = 20f;
-    public const float CrowdSpacingDepth = 12f;
+    public const float CrowdSpacingX = 14f;
+    public const float CrowdSpacingDepth = 9f;
     public const int CrowdColumns = 10;
     public const int MaxCrowdVisible = 300;
+    /// <summary>Half the width of the full crowd formation (keeps crowd on road).</summary>
+    public const float CrowdHalfWidth = CrowdSpacingX * CrowdColumns / 2f;
 
     // Gate
     public const float GateWidth = 100f;
@@ -51,7 +53,8 @@ public static class GameConstants
 
     // Spawn
     public const float SpawnDepth = MaxDepth - 20f;
-    public const float SpawnInterval = 1.2f;   // seconds between enemy waves
+    public const float SpawnInterval = 0.1f;   // seconds between zombie spawn batches (100 ms)
+    public const int ZombiesPerSpawn = 8;       // zombies added per batch
     public const float GateSpawnInterval = 4.0f;
-    public const int MaxEnemiesOnScreen = 80;  // cap on simultaneous enemies
+    public const int MaxEnemiesOnScreen = 500;  // cap on simultaneous zombies
 }

@@ -32,7 +32,7 @@
     </div>
 
     <div class="inspector-panel">
-        <div class="inspector-title">🔍 Inspector</div>
+        <div class="inspector-title">Inspector</div>
 
         <div class="inspector-section">
             <div class="inspector-label">Phase</div>
@@ -54,36 +54,39 @@
         <div class="inspector-divider"></div>
 
         <div class="inspector-section">
-            <div class="inspector-label">👥 Player crowd</div>
+            <div class="inspector-label">Soldiers</div>
             <div class="inspector-value">@_state.Crowd.Count</div>
         </div>
         <div class="inspector-section">
-            <div class="inspector-label">👹 Enemies</div>
+            <div class="inspector-label">Zombies</div>
             <div class="inspector-value">@_state.Enemies.Count</div>
         </div>
         <div class="inspector-section">
-            <div class="inspector-label">🔵 Player bullets</div>
+            <div class="inspector-label">Bullets</div>
             <div class="inspector-value">@_state.PlayerBullets.Count</div>
         </div>
         <div class="inspector-section">
-            <div class="inspector-label">🔴 Enemy bullets</div>
-            <div class="inspector-value">@_state.EnemyBullets.Count</div>
-        </div>
-        <div class="inspector-section">
-            <div class="inspector-label">💥 Particles</div>
+            <div class="inspector-label">Particles</div>
             <div class="inspector-value">@_state.Particles.Count</div>
         </div>
 
         <div class="inspector-divider"></div>
 
-        <div class="inspector-label">Max enemies: @_state.MaxEnemiesOnScreen</div>
+        <div class="inspector-label">Max zombies: @_state.MaxEnemiesOnScreen</div>
         <input type="range"
                class="inspector-slider"
-               min="1" max="300"
+               min="1" max="1000"
                value="@_state.MaxEnemiesOnScreen"
                @oninput="OnMaxEnemiesChanged" />
 
-        <div class="inspector-hint">Slide to change the enemy cap in real-time.</div>
+        <div class="inspector-label">Spawn delay: @((int)(_state.SpawnInterval * 1000)) ms</div>
+        <input type="range"
+               class="inspector-slider"
+               min="50" max="2000" step="10"
+               value="@((int)(_state.SpawnInterval * 1000))"
+               @oninput="OnSpawnIntervalChanged" />
+
+        <div class="inspector-hint">Sliders change settings in real-time.</div>
     </div>
 
 </div>
@@ -215,6 +218,12 @@
     {
         if (int.TryParse(e.Value?.ToString(), out int value))
             _state.MaxEnemiesOnScreen = value;
+    }
+
+    private void OnSpawnIntervalChanged(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out int ms))
+            _state.SpawnInterval = ms / 1000f;
     }
 
     // ── Lifecycle ─────────────────────────────────────────────────────────

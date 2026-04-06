@@ -75,11 +75,11 @@ public sealed class GameEngine(IInputProvider input)
         player.VelocityX += inputState.HorizontalAxis * accel * dt;
         player.VelocityX *= drag;
 
-        // Move and clamp to road bounds
+        // Move and clamp to road bounds — keep the full crowd formation on-road
         player.WorldX += player.VelocityX * dt;
         player.WorldX = System.Math.Clamp(player.WorldX,
-            -GameConstants.WorldHalfWidth + player.Radius,
-             GameConstants.WorldHalfWidth - player.Radius);
+            -GameConstants.WorldHalfWidth + GameConstants.CrowdHalfWidth,
+             GameConstants.WorldHalfWidth - GameConstants.CrowdHalfWidth);
 
         // Auto-fire
         player.HitFlashTimer = System.Math.Max(0f, player.HitFlashTimer - dt);
@@ -97,22 +97,20 @@ public sealed class GameEngine(IInputProvider input)
 
     private static void FirePlayerBullets(GameState state)
     {
-        int level = state.Player.GunLevel;
-        float x = state.Player.WorldX;
-        float d = state.Player.Depth;
+        // More crowd members = more bullets, spread across the formation width.
+        // Gun level acts as a density multiplier (gate reward).
+        int baseBullets = System.Math.Max(1, state.Crowd.Count / 5);
+        float densityMul = 1f + state.Player.GunLevel * 0.5f;
+        int count = System.Math.Min((int)(baseBullets * densityMul), 50);
 
-        // Level 0: single shot; Level 1+: spread
-        state.PlayerBullets.Add(new Bullet(BulletOwner.Player, x, d, GameConstants.BulletSpeed));
+        float spreadHalf = GameConstants.CrowdHalfWidth;
+        float depth = state.Player.Depth;
 
-        if (level >= 1)
+        for (int i = 0; i < count; i++)
         {
-            state.PlayerBullets.Add(new Bullet(BulletOwner.Player, x - 25f, d, GameConstants.BulletSpeed));
-            state.PlayerBullets.Add(new Bullet(BulletOwner.Player, x + 25f, d, GameConstants.BulletSpeed));
-        }
-        if (level >= 2)
-        {
-            state.PlayerBullets.Add(new Bullet(BulletOwner.Player, x - 55f, d, GameConstants.BulletSpeed));
-            state.PlayerBullets.Add(new Bullet(BulletOwner.Player, x + 55f, d, GameConstants.BulletSpeed));
+            float t = count == 1 ? 0.5f : (float)i / (count - 1);
+            float worldX = state.Player.WorldX + (t * 2f - 1f) * spreadHalf;
+            state.PlayerBullets.Add(new Bullet(BulletOwner.Player, worldX, depth, GameConstants.BulletSpeed));
         }
     }
 
@@ -137,19 +135,9 @@ public sealed class GameEngine(IInputProvider input)
     {
         foreach (var e in state.Enemies)
         {
-            e.Depth -= e.Speed * dt;  // enemies come toward player
+            e.Depth -= e.Speed * dt;  // zombies shuffle toward player
 
-            // Fire back at player
-            e.FireTimer -= dt;
-            if (e.FireTimer <= 0f)
-            {
-                state.EnemyBullets.Add(
-                    new Bullet(BulletOwner.Enemy, e.WorldX, e.Depth,
-                               GameConstants.EnemyBulletSpeed));
-                e.FireTimer = GameConstants.EnemyFireRate + (float)Random.Shared.NextDouble() * 1.5f;
-            }
-
-            // Past the player — hit crowd
+            // Past the player — overrun the crowd
             if (e.Depth < 0f)
             {
                 e.IsDestroyed = true;
@@ -224,15 +212,8 @@ public sealed class GameEngine(IInputProvider input)
             }
         }
 
-        // Enemy bullets vs player
-        foreach (var bullet in state.EnemyBullets)
-        {
-            if (bullet.IsDestroyed) continue;
-            if (!bullet.Overlaps(player)) continue;
-
-            bullet.IsDestroyed = true;
-            HitPlayer(state);
-        }
+        // Enemy bullets vs player — zombies don't shoot, list is always empty
+        // (collision block retained for completeness; no-ops at runtime)
 
         // Gates vs player
         foreach (var gate in state.Gates)
@@ -290,8 +271,8 @@ public sealed class GameEngine(IInputProvider input)
 
     private static void CheckEndConditions(GameState state)
     {
-        // Game over if the crowd is wiped out (overrun) or the player is killed
-        if (state.Crowd.IsEmpty || state.Player.Health <= 0)
+        // Game over when the crowd is wiped out — zombies have overrun the army
+        if (state.Crowd.IsEmpty)
             state.Phase = GamePhase.GameOver;
     }
 }

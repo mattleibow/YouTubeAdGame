@@ -48,8 +48,11 @@ public sealed class GameState
     public float PlayerFireTimer { get; set; }
 
     // ── Runtime tuning (adjustable via debug inspector) ──────────────────────
-    /// <summary>Maximum simultaneous enemies on screen. Adjustable at runtime.</summary>
+    /// <summary>Maximum simultaneous zombies on screen. Adjustable at runtime.</summary>
     public int MaxEnemiesOnScreen { get; set; } = GameConstants.MaxEnemiesOnScreen;
+
+    /// <summary>Seconds between zombie spawn batches. Adjustable at runtime.</summary>
+    public float SpawnInterval { get; set; } = GameConstants.SpawnInterval;
 
     // ── Viewport (set by renderer) ──────────────────────────────────────────
     public float ViewportWidth { get; set; } = 400f;

@@ -16,10 +16,10 @@ internal sealed class SpawnSystem
         state.EnemySpawnTimer -= dt;
         if (state.EnemySpawnTimer <= 0f)
         {
-            SpawnEnemyWave(state);
-            // Gradually reduce interval as waves progress, minimum 0.5 s
-            float interval = System.Math.Max(0.5f,
-                GameConstants.SpawnInterval - state.Wave * 0.05f);
+            SpawnZombieBatch(state);
+            // Use the runtime-adjustable interval; a small wave bonus keeps pressure rising
+            float interval = System.Math.Max(0.05f,
+                state.SpawnInterval - state.Wave * 0.002f);
             state.EnemySpawnTimer = interval;
         }
 
@@ -43,19 +43,26 @@ internal sealed class SpawnSystem
         // Intentionally empty: the horde streams in via SpawnEnemyWave.
     }
 
-    private static void SpawnEnemyWave(GameState state)
+    private static void SpawnZombieBatch(GameState state)
     {
-        // Stream in one enemy at a time, respecting the runtime-adjustable cap
-        if (state.Enemies.Count >= state.MaxEnemiesOnScreen) return;
+        // Spawn a whole batch of zombies at the horizon to create a sea effect
+        int capacity = state.MaxEnemiesOnScreen - state.Enemies.Count;
+        if (capacity <= 0) return;
 
-        float x = (float)(Rng.NextDouble() * 2.0 - 1.0)
-                  * (GameConstants.WorldHalfWidth - GameConstants.EnemyRadius);
-        state.Enemies.Add(new Enemy
+        int toSpawn = System.Math.Min(GameConstants.ZombiesPerSpawn, capacity);
+        float spread = GameConstants.WorldHalfWidth - GameConstants.EnemyRadius;
+
+        for (int i = 0; i < toSpawn; i++)
         {
-            WorldX = x,
-            Depth  = GameConstants.SpawnDepth,
-            Speed  = GameConstants.EnemySpeed + (float)(Rng.NextDouble() * 20.0 - 10.0) + state.Wave * 2f
-        });
+            float x = (float)(Rng.NextDouble() * 2.0 - 1.0) * spread;
+            float depthJitter = (float)(Rng.NextDouble() * 30.0);  // stagger depth slightly
+            state.Enemies.Add(new Enemy
+            {
+                WorldX = x,
+                Depth  = GameConstants.SpawnDepth - depthJitter,
+                Speed  = GameConstants.EnemySpeed + (float)(Rng.NextDouble() * 20.0 - 10.0) + state.Wave * 2f
+            });
+        }
     }
 
     private static void SpawnGatePair(GameState state)

@@ -372,11 +372,7 @@ public sealed class SkiaGameRenderer : IRenderer
 
         // Crowd count — top right
         DrawText(canvas, $"× {state.Crowd.Count}", Width - 90f, 28f, ColCrowd, 22f, bold: true);
-        DrawText(canvas, "CROWD", Width - 80f, 50f, ColCrowd.WithAlpha(180), 12f);
-
-        // Player health (hearts)
-        for (int i = 0; i < state.Player.Health; i++)
-            DrawText(canvas, "♥", Width - 30f - i * 24f, Height - 20f, ColPlayerFlash, 18f);
+        DrawText(canvas, "SOLDIERS", Width - 90f, 50f, ColCrowd.WithAlpha(180), 12f);
 
         // Gun level
         if (state.Player.GunLevel > 0)
