@@ -147,26 +147,30 @@ internal sealed class SpawnSystem
     /// </summary>
     private static GateDefinition? PickGateDefinition(MapDefinition map, int wave, bool isLeftLane)
     {
+        // Cache available gates to avoid iterating the palette twice
+        List<GateDefinition>? available = null;
         float totalWeight = 0f;
+
         foreach (var g in map.GatePalette)
         {
             if (!IsAvailable(g, wave, isLeftLane)) continue;
+            available ??= [];
+            available.Add(g);
             totalWeight += g.SpawnWeight;
         }
 
-        if (totalWeight <= 0f) return null;
+        if (available is null || totalWeight <= 0f) return null;
 
         float roll = (float)(Rng.NextDouble() * totalWeight);
         float cumulative = 0f;
-        foreach (var g in map.GatePalette)
+        foreach (var g in available)
         {
-            if (!IsAvailable(g, wave, isLeftLane)) continue;
             cumulative += g.SpawnWeight;
             if (roll < cumulative) return g;
         }
 
-        // Shouldn't reach here, but return last available
-        return map.GatePalette[^1];
+        // Return the last available gate (always valid since we filtered above)
+        return available[^1];
     }
 
     private static bool IsAvailable(GateDefinition def, int wave, bool isLeftLane)
@@ -207,25 +211,28 @@ internal sealed class SpawnSystem
 
     private static PowerUpDefinition? PickPowerUpDefinition(MapDefinition map, int wave)
     {
+        List<PowerUpDefinition>? available = null;
         float totalWeight = 0f;
+
         foreach (var p in map.PowerUpPalette)
         {
             if (!IsAvailable(p, wave)) continue;
+            available ??= [];
+            available.Add(p);
             totalWeight += p.SpawnWeight;
         }
 
-        if (totalWeight <= 0f) return null;
+        if (available is null || totalWeight <= 0f) return null;
 
         float roll = (float)(Rng.NextDouble() * totalWeight);
         float cumulative = 0f;
-        foreach (var p in map.PowerUpPalette)
+        foreach (var p in available)
         {
-            if (!IsAvailable(p, wave)) continue;
             cumulative += p.SpawnWeight;
             if (roll < cumulative) return p;
         }
 
-        return map.PowerUpPalette[^1];
+        return available[^1];
     }
 
     private static bool IsAvailable(PowerUpDefinition def, int wave)

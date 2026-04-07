@@ -252,9 +252,19 @@ public sealed class SkiaGameRenderer : IRenderer
             canvas.DrawRect(sx - w * 0.5f, sy - h, w, h, _strokePaint);
 
             // Label
-            string label = gate.IsOpen ? gate.Label : (gate.OnShot == GateHitBehavior.IncrementCounter
-                ? $"{gate.HitCounter}/{gate.HitsRemaining}"
-                : $"[{gate.HitsRemaining}]");
+            string label;
+            if (gate.IsOpen)
+            {
+                label = gate.Label;
+            }
+            else if (gate.OnShot == GateHitBehavior.IncrementCounter)
+            {
+                label = $"{gate.HitCounter}/{gate.HitsRemaining}";
+            }
+            else
+            {
+                label = $"[{gate.HitsRemaining}]";
+            }
             float fontSize = System.Math.Max(10f, 18f * scale);
             DrawCenteredText(canvas, label, sx, sy - h * 0.5f, col, fontSize, bold: true);
 

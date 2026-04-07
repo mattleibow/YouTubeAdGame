@@ -203,7 +203,7 @@ public sealed class GameEngine(IInputProvider input)
                     g.Depth -= speed * dt;
                     g.OscillateTimer += dt;
                     float amplitude = GameConstants.LaneWidth * 0.3f;
-                    g.WorldX = g.LaneCenterX + amplitude * (float)System.Math.Sin(g.OscillateTimer * 3f);
+                    g.WorldX = g.LaneCenterX + amplitude * (float)System.Math.Sin(g.OscillateTimer * GameConstants.GateOscillateFrequency);
                     break;
 
                 case GateMovement.Static:

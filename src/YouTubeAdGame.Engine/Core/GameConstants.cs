@@ -54,13 +54,16 @@ public static class GameConstants
     public const float GateDepth = 20f;     // world-depth size
     public const float GateScrollSpeed = 150f;  // depth-units / second — much faster than zombies
 
+    /// <summary>Frequency of oscillating gate horizontal movement (radians per second).</summary>
+    public const float GateOscillateFrequency = 3f;
+
     // Game loop
     public const double TargetFps = 60.0;
     public const double FixedDeltaTime = 1.0 / TargetFps;
 
     // Spawn
     public const float SpawnDepth = MaxDepth - 20f;
-    public const float SpawnInterval = 0.1f;   // seconds between zombie spawn batches (100 ms)
+    public const float SpawnInterval = 0.1f;   // default seconds between zombie spawn batches (wave pressure reduces this)
     public const int ZombiesPerSpawn = 8;       // zombies added per batch
     public const float GateSpawnInterval = 4.0f;
     public const int MaxEnemiesOnScreen = 500;  // cap on simultaneous zombies
