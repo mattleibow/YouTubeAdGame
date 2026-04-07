@@ -8,7 +8,7 @@
 
     <!-- ── Header ─────────────────────────────────────────────── -->
     <div class="editor-header">
-        <a class="editor-back" href="/">&#8592; Back to Game</a>
+        <a class="editor-back" href="">&#8592; Back to Game</a>
         <span class="editor-title">MAP EDITOR</span>
         <span class="editor-status">@_status</span>
     </div>
@@ -462,7 +462,7 @@
     private async Task PlayNow()
     {
         await MapStorage.SaveActiveMapAsync(BuildDefinition());
-        Nav.NavigateTo("/?playCustom=1");
+        Nav.NavigateTo("?playCustom=1");
     }
 
     private async Task ExportJson()
