@@ -22,13 +22,55 @@ The player commands a **crowd of soldiers** marching down the road toward an end
 
 ### Game Modes
 
-The main menu shows the available game mode(s). Each mode tweaks core gameplay constants (lane count, gate speed, bullet speed, etc.). The `GameMode` enum in `Core/GameMode.cs` defines the modes; `GameState.Mode` tracks the selected mode.
+The main menu shows the available game mode(s). Each mode is defined by a `MapDefinition` in `Maps/MapRegistry.cs` — a data-driven record that configures all gameplay parameters, gate palettes, power-up palettes, and wave scripting. The `GameMode` enum in `Core/GameMode.cs` identifies modes; `MapRegistry.Get(GameMode)` returns the full `MapDefinition`.
 
 | Mode | Lanes | Gate speed | Bullet speed | Notes |
 |------|-------|-----------|-------------|-------|
 | **Horde Runner** | 3 | 150 depth/s (3× zombie speed) | 1400 | Default. Vast zombie hordes, fast gates to build army |
 
-More modes can be added by extending the `GameMode` enum and branching on `state.Mode` in the engine/renderer.
+New modes are added by: (1) extending `GameMode` enum, (2) adding a `MapDefinition` to `MapRegistry`. No engine/spawn/renderer changes required.
+
+### Data-Driven Map System
+
+Each `MapDefinition` (in `Maps/`) contains:
+- **Road/lane config**: lane count, lane width
+- **Player tuning**: speed, bullet speed, fire rate
+- **Enemy tuning**: base speed, max enemies, spawn interval
+- **Gate tuning**: scroll speed, spawn interval
+- **GatePalette**: list of `GateDefinition` records (operation, operand range, movement style, open/closed, on-shot behaviour, wave filters, spawn weight)
+- **PowerUpPalette**: list of `PowerUpDefinition` records (type, duration, blocked/concrete, block health, on-shot behaviour, wave filters, spawn weight)
+- **Waves**: optional per-wave overrides (speed multipliers, spawn rate, available gates/power-ups)
+
+### Gate Behaviour System
+
+Gates now support configurable behaviours beyond simple pass-through:
+
+| Property | Options | Description |
+|----------|---------|-------------|
+| `Movement` | `Static`, `ScrollWithWorld`, `FastScroll`, `Oscillate` | How the gate moves |
+| `IsOpen` | `true`/`false` | Whether the gate starts passable or blocked |
+| `OnShot` | `Nothing`, `Open`, `Close`, `Toggle`, `Destroy`, `IncrementCounter` | What happens when shot |
+| `HitsToOpen` | int | Shots needed to open/destroy |
+
+Closed gates display a grey locked appearance. Shooting a gate with `OnShot != Nothing` decrements its hit counter.
+
+### Power-Up System
+
+Power-ups are collectible objects that grant time-limited effects or instant bonuses:
+
+| Type | Duration | Effect |
+|------|----------|--------|
+| `SpeedBoost` | 4s | 1.5× player movement speed |
+| `Shield` | 6s | Absorbs one zombie hit |
+| `RapidFire` | 5s | 0.4× fire rate (faster shooting) |
+| `BulletPierce` | varies | Bullets pass through enemies |
+| `ExtraSoldiers` | instant | +5 soldiers |
+| `SlowEnemies` | 4s | Enemies move at 0.4× speed |
+| `FreezeEnemies` | varies | Enemies stop moving |
+
+Power-ups may be wrapped in **concrete blocks** that require shooting to break. `BlockHealth` controls hits needed; `OnShot` can be `BreakConcrete` or `IncrementCounter`.
+
+Active effects are tracked in `GameState.ActiveEffects` and rendered as timer bars in the HUD.
 
 ## Repository Structure
 
@@ -38,9 +80,10 @@ src/
 ├── YouTubeAdGame.Engine/              ← platform-independent class library
 │   ├── Core/                          ← GameState, GameConstants, IRenderer, IInputProvider
 │   ├── Math/                          ← Camera (pseudo-3D projection), MathHelper
-│   ├── Objects/                       ← Player, Enemy, Boss, Bullet, Gate, Obstacle, Crowd
-│   ├── Effects/                       ← ScreenShake, FloatingText, Particle
+│   ├── Objects/                       ← Player, Enemy, Boss, Bullet, Gate, Obstacle, Crowd, PowerUp
+│   ├── Effects/                       ← ScreenShake, FloatingText, Particle, ActiveEffect
 │   ├── Engine/                        ← GameEngine (update loop), SpawnSystem
+│   ├── Maps/                          ← MapDefinition, GateDefinition, PowerUpDefinition, WaveDefinition, MapRegistry
 │   └── Rendering/                     ← SkiaGameRenderer
 └── YouTubeAdGame.Web/                 ← Blazor WebAssembly host
     ├── Components/GameCanvas.razor    ← SKCanvasView + 60 Hz game loop + debug inspector
@@ -179,7 +222,15 @@ This means you can preview any PR branch on GitHub Pages simply by adding the `d
 | `Core/IRenderer.cs` | Rendering abstraction |
 | `Math/Camera.cs` | Pseudo-3D projection math |
 | `Engine/GameEngine.cs` | Fixed-timestep update, collision, end-conditions |
-| `Engine/SpawnSystem.cs` | Zombie batch spawning and gate spawning |
+| `Engine/SpawnSystem.cs` | Zombie batch spawning, gate spawning, power-up spawning |
+| `Maps/MapDefinition.cs` | Top-level data-driven mode configuration |
+| `Maps/GateDefinition.cs` | Gate behavior template (movement, on-shot, open/closed) |
+| `Maps/PowerUpDefinition.cs` | Power-up behavior template (type, duration, blocked, on-shot) |
+| `Maps/WaveDefinition.cs` | Per-wave tuning overrides |
+| `Maps/MapRegistry.cs` | Factory mapping `GameMode` → `MapDefinition` |
+| `Objects/Gate.cs` | Runtime gate object with data-driven behaviour properties |
+| `Objects/PowerUp.cs` | Collectable power-up (optionally wrapped in concrete block) |
+| `Effects/ActiveEffect.cs` | Time-limited player buff (shield, rapid fire, etc.) |
 | `Rendering/SkiaGameRenderer.cs` | Full scene rendering |
 | `Components/GameCanvas.razor` | 60 Hz loop, SKCanvasView wiring, debug inspector panel |
 | `Input/BlazorInputProvider.cs` | Browser input → `IInputProvider` |
@@ -200,9 +251,11 @@ dotnet run --project src/YouTubeAdGame.Web
 | Feature | Where to add |
 |---------|-------------|
 | New weapon | `Engine/GameEngine.cs` + `Rendering/SkiaGameRenderer.cs` |
-| New game mode | Add variant to `Core/GameMode.cs`; branch on `state.Mode` in engine/spawn/renderer |
+| New game mode | Add variant to `Core/GameMode.cs`; add a `MapDefinition` to `Maps/MapRegistry.cs` — no engine/spawn/renderer changes needed |
 | New enemy behaviour | `Objects/Enemy.cs` + `Engine/SpawnSystem.cs` |
 | New gate operation | `Objects/Gate.cs` `GateOperation` enum |
+| New gate movement / hit behaviour | `Maps/GateMovement.cs`, `Maps/GateHitBehavior.cs` enums; handle in `GameEngine.UpdateGateMovement` / `HandleGateHit` |
+| New power-up type | `Maps/PowerUpType.cs` enum; handle in `GameEngine.ApplyPowerUp` / `UpdatePlayer` / `UpdateEnemies` |
 | New visual effect | `Effects/` + `Rendering/SkiaGameRenderer.cs` |
 | New debug stat | Add to inspector HTML in `GameCanvas.razor` |
 | New runtime tuning knob | Add mutable property to `GameState` (default from `GameConstants`); wire up a slider/toggle in the inspector (use ASCII labels — no emoji) |

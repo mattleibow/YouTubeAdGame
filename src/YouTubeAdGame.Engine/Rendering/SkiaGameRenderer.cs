@@ -1,5 +1,6 @@
 using SkiaSharp;
 using YouTubeAdGame.Engine.Core;
+using YouTubeAdGame.Engine.Maps;
 using YouTubeAdGame.Engine.Math;
 using YouTubeAdGame.Engine.Objects;
 using YouTubeAdGame.Engine.Effects;
@@ -46,6 +47,9 @@ public sealed class SkiaGameRenderer : IRenderer
     private static readonly SKColor ColParticle   = new(0xFF_FF9F0A);
     private static readonly SKColor ColFogWhite   = new(0x00_E8F4F8);
     private static readonly SKColor ColFogFull    = new(0xCC_C8D6E5);
+    private static readonly SKColor ColPowerUp    = new(0xFF_5AC8FA);
+    private static readonly SKColor ColConcrete   = new(0xFF_8E8E93);
+    private static readonly SKColor ColGateClosed = new(0xFF_636366);
 
     // ── Paints (reused to avoid GC pressure) ─────────────────────────────
     private readonly SKPaint _fillPaint  = new() { IsAntialias = true, Style = SKPaintStyle.Fill };
@@ -82,6 +86,7 @@ public sealed class SkiaGameRenderer : IRenderer
         DrawRoad(canvas, camera);
         DrawObstacles(canvas, camera, state);
         DrawGates(canvas, camera, state);
+        DrawPowerUps(canvas, camera, state);
         DrawEnemies(canvas, camera, state);
         DrawEnemyBullets(canvas, camera, state);
         DrawPlayerBullets(canvas, camera, state);
@@ -93,6 +98,7 @@ public sealed class SkiaGameRenderer : IRenderer
         canvas.Restore();  // undo shake
 
         DrawHud(canvas, state);
+        DrawActiveEffectsHud(canvas, state);
 
         // Overlay screens
         switch (state.Phase)
@@ -219,17 +225,26 @@ public sealed class SkiaGameRenderer : IRenderer
             float w = GameConstants.GateWidth  * scale;
             float h = GameConstants.GateHeight * scale;
 
-            SKColor col = gate.Operation switch
+            SKColor col;
+            if (!gate.IsOpen)
             {
-                GateOperation.Add        => ColGateAdd,
-                GateOperation.Subtract   => ColGateSub,
-                GateOperation.Multiply   => ColGateMul,
-                GateOperation.UpgradeGun => ColGateGun,
-                _                        => SKColors.White
-            };
+                // Closed gate: grey with a lock visual
+                col = ColGateClosed;
+            }
+            else
+            {
+                col = gate.Operation switch
+                {
+                    GateOperation.Add        => ColGateAdd,
+                    GateOperation.Subtract   => ColGateSub,
+                    GateOperation.Multiply   => ColGateMul,
+                    GateOperation.UpgradeGun => ColGateGun,
+                    _                        => SKColors.White
+                };
+            }
 
             // Gate arch
-            _fillPaint.Color = col.WithAlpha(60);
+            _fillPaint.Color = col.WithAlpha(gate.IsOpen ? (byte)60 : (byte)120);
             canvas.DrawRect(sx - w * 0.5f, sy - h, w, h, _fillPaint);
 
             _strokePaint.Color       = col;
@@ -237,10 +252,54 @@ public sealed class SkiaGameRenderer : IRenderer
             canvas.DrawRect(sx - w * 0.5f, sy - h, w, h, _strokePaint);
 
             // Label
+            string label = gate.IsOpen ? gate.Label : (gate.OnShot == GateHitBehavior.IncrementCounter
+                ? $"{gate.HitCounter}/{gate.HitsRemaining}"
+                : $"[{gate.HitsRemaining}]");
             float fontSize = System.Math.Max(10f, 18f * scale);
-            DrawCenteredText(canvas, gate.Label, sx, sy - h * 0.5f, col, fontSize, bold: true);
+            DrawCenteredText(canvas, label, sx, sy - h * 0.5f, col, fontSize, bold: true);
 
             ApplyFog(canvas, sx - w, sy - h, w * 2, h, Camera.FogAlpha(gate.Depth));
+        }
+    }
+
+    // ── Power-ups ────────────────────────────────────────────────────────────
+
+    private void DrawPowerUps(SKCanvas canvas, Camera camera, GameState state)
+    {
+        foreach (var pu in state.PowerUps)
+        {
+            var (sx, sy, scale) = camera.Project(pu.WorldX, pu.Depth);
+            float r = pu.Radius * scale;
+
+            if (pu.IsBlocked)
+            {
+                // Concrete block
+                _fillPaint.Color = ColConcrete;
+                canvas.DrawRoundRect(sx - r, sy - r, r * 2f, r * 2f, r * 0.3f, r * 0.3f, _fillPaint);
+
+                _strokePaint.Color       = ColConcrete.WithAlpha(200);
+                _strokePaint.StrokeWidth = 2f * scale;
+                canvas.DrawRoundRect(sx - r, sy - r, r * 2f, r * 2f, r * 0.3f, r * 0.3f, _strokePaint);
+
+                // Hit counter
+                float fontSize = System.Math.Max(8f, 14f * scale);
+                string counterText = $"{pu.BlockHitsRemaining}";
+                DrawCenteredText(canvas, counterText, sx, sy + fontSize * 0.3f, SKColors.White, fontSize, bold: true);
+            }
+            else
+            {
+                // Revealed power-up — glowing orb
+                _fillPaint.Color = ColPowerUp.WithAlpha(40);
+                canvas.DrawCircle(sx, sy, r * 1.3f, _fillPaint);
+
+                _fillPaint.Color = ColPowerUp;
+                canvas.DrawCircle(sx, sy, r * 0.8f, _fillPaint);
+
+                float fontSize = System.Math.Max(8f, 12f * scale);
+                DrawCenteredText(canvas, pu.Label, sx, sy + fontSize * 0.3f, SKColors.White, fontSize, bold: true);
+            }
+
+            ApplyFog(canvas, sx - r, sy - r, r * 2f, r * 2f, Camera.FogAlpha(pu.Depth));
         }
     }
 
@@ -384,6 +443,44 @@ public sealed class SkiaGameRenderer : IRenderer
             DrawText(canvas, $"GUN LV {state.Player.GunLevel + 1}", 16f, Height - 20f, ColGateGun, 14f);
     }
 
+    /// <summary>Draw active power-up effect icons at the bottom of the screen.</summary>
+    private void DrawActiveEffectsHud(SKCanvas canvas, GameState state)
+    {
+        if (state.Phase == GamePhase.Menu || state.ActiveEffects.Count == 0) return;
+
+        float x = 16f;
+        float y = Height - 50f;
+
+        foreach (var effect in state.ActiveEffects)
+        {
+            string label = effect.Type switch
+            {
+                PowerUpType.SpeedBoost   => "SPD",
+                PowerUpType.Shield       => "SHD",
+                PowerUpType.RapidFire    => "RPD",
+                PowerUpType.BulletPierce => "PRC",
+                PowerUpType.SlowEnemies  => "SLW",
+                PowerUpType.FreezeEnemies => "FRZ",
+                _ => "?"
+            };
+
+            // Timer bar background
+            float barW = 40f;
+            float barH = 6f;
+            _fillPaint.Color = new SKColor(0, 0, 0, 100);
+            canvas.DrawRoundRect(x, y + 10f, barW, barH, 2f, 2f, _fillPaint);
+
+            // Timer bar fill
+            float fill = System.Math.Clamp(effect.RemainingFraction, 0f, 1f);
+            _fillPaint.Color = ColPowerUp;
+            canvas.DrawRoundRect(x, y + 10f, barW * fill, barH, 2f, 2f, _fillPaint);
+
+            // Label
+            DrawText(canvas, label, x, y + 6f, ColPowerUp, 11f, bold: true);
+            x += 50f;
+        }
+    }
+
     // ── Overlay screens ──────────────────────────────────────────────────────
 
     private void DrawMenuOverlay(SKCanvas canvas, GameState state)
@@ -391,17 +488,10 @@ public sealed class SkiaGameRenderer : IRenderer
         DrawDimOverlay(canvas, 0.6f);
         DrawCenteredText(canvas, "CROWD RUNNER", Width * 0.5f, Height * 0.30f, ColPlayer, 40f, bold: true);
 
-        // Mode display
-        string modeName = state.Mode switch
-        {
-            GameMode.HordeRunner => "HORDE RUNNER",
-            _ => "UNKNOWN"
-        };
-        string modeDesc = state.Mode switch
-        {
-            GameMode.HordeRunner => "3 lanes / fast gates / vast hordes",
-            _ => ""
-        };
+        // Read mode name/description from MapRegistry
+        var mapDef = MapRegistry.Get(state.Mode);
+        string modeName = mapDef.Name.ToUpperInvariant();
+        string modeDesc = mapDef.Description;
 
         // Mode "button"
         float btnY = Height * 0.46f;
