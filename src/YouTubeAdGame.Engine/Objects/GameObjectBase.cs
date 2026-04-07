@@ -14,6 +14,13 @@ public abstract class GameObjectBase
     /// </summary>
     public float Depth { get; set; }
 
+    /// <summary>
+    /// Height above the road surface in world units.
+    /// 0 = on the ground; positive values float the object above the road.
+    /// Used for animated bobbing (e.g. power-ups) and perspective-correct height rendering.
+    /// </summary>
+    public float WorldHeight { get; set; }
+
     /// <summary>Logical radius for circle-based collision checks.</summary>
     public float Radius { get; set; }
 

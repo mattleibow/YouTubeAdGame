@@ -49,6 +49,16 @@ internal sealed class SpawnSystem
             }
         }
 
+        // Barriers — spawn every ~15 s, scaled by wave
+        const float barrierBaseInterval = 15f;
+        float barrierInterval = System.Math.Max(5f, barrierBaseInterval - state.Wave * 1.5f);
+        state.BarrierSpawnTimer -= dt;
+        if (state.BarrierSpawnTimer <= 0f)
+        {
+            SpawnBarrier(state);
+            state.BarrierSpawnTimer = barrierInterval;
+        }
+
         // Advance wave every 1800 distance units
         state.Wave = 1 + (int)(state.Distance / 1800f);
     }
@@ -259,9 +269,38 @@ internal sealed class SpawnSystem
         return true;
     }
 
-    /// <summary>
-    /// Original hard-coded gate choice logic — used when no ActiveMap is loaded.
-    /// </summary>
+    private static void SpawnBarrier(GameState state)
+    {
+        // Spawn a barrier in a random lane or spanning multiple lanes
+        int laneCount = state.ActiveMap?.LaneCount ?? GameConstants.LaneCount;
+        float laneWidth = state.ActiveMap?.LaneWidth ?? GameConstants.LaneWidth;
+
+        // Randomly choose 1 to 2 lanes wide
+        int lanesWide = Rng.Next(1, 3);
+        int startLane = Rng.Next(0, laneCount - lanesWide + 1);
+
+        float leftEdge  = -GameConstants.WorldHalfWidth + startLane * laneWidth;
+        float rightEdge = leftEdge + lanesWide * laneWidth;
+        float centerX   = (leftEdge + rightEdge) * 0.5f;
+        float width     = rightEdge - leftEdge - 10f;
+
+        int health = 3 + state.Wave * 2;
+
+        state.Barriers.Add(new Objects.Barrier
+        {
+            WorldX      = centerX,
+            Depth       = GameConstants.SpawnDepth - 30f,
+            Width       = width,
+            Height      = 50f,
+            Health      = health,
+            MaxHealth   = health,
+            CrowdDamage = lanesWide * 2,
+            ScrollSpeed = 0f,
+            Radius      = width * 0.5f
+        });
+    }
+
+    /// <summary>Original hard-coded gate choice logic — used when no ActiveMap is loaded.</summary>
     private static (GateOperation op, int operand) ChooseOperationFallback(GameState state, bool leftLane)
     {
         int crowd = state.Crowd.Count;

@@ -46,6 +46,10 @@ public static class GameConstants
     public const int MaxCrowdVisible = 300;
     /// <summary>Half the width of the full crowd formation (keeps crowd on road).</summary>
     public const float CrowdHalfWidth = CrowdSpacingX * CrowdColumns / 2f;
+    /// <summary>Maximum soldiers that fire per salvo (inspector slider default).</summary>
+    public const int DefaultConcurrentShooters = 15;
+    /// <summary>Amplitude of the random per-soldier bobbing in world units.</summary>
+    public const float SoldierBobAmplitude = 4f;
 
     // Gate
     public const float GateWidth = 190f;    // visual width — fills a full lane

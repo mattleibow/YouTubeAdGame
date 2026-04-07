@@ -39,6 +39,9 @@ public sealed class PowerUp : GameObjectBase
         Radius = Core.GameConstants.GateCollisionRadius * 0.6f;  // slightly smaller than gates
     }
 
+    /// <summary>Accumulated bob time (seconds). Drives the floating animation.</summary>
+    public float BobTimer { get; set; }
+
     /// <summary>Human-readable label for the power-up icon.</summary>
     public string Label => Type switch
     {

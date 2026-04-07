@@ -45,6 +45,7 @@ public sealed class GameState
     public List<Objects.Gate> Gates { get; } = [];
     public List<Objects.Obstacle> Obstacles { get; } = [];
     public List<Objects.PowerUp> PowerUps { get; } = [];
+    public List<Objects.Barrier> Barriers { get; } = [];
 
     // ── Effects ─────────────────────────────────────────────────────────────
     public Effects.ScreenShake ScreenShake { get; } = new();
@@ -62,6 +63,9 @@ public sealed class GameState
     /// <summary>Timer for power-up spawning.</summary>
     public float PowerUpSpawnTimer { get; set; }
 
+    /// <summary>Timer for barrier spawning.</summary>
+    public float BarrierSpawnTimer { get; set; } = 15f;
+
     // ── Runtime tuning (adjustable via debug inspector) ──────────────────────
     /// <summary>Maximum simultaneous zombies on screen. Adjustable at runtime.</summary>
     public int MaxEnemiesOnScreen { get; set; } = GameConstants.MaxEnemiesOnScreen;
@@ -69,7 +73,17 @@ public sealed class GameState
     /// <summary>Seconds between zombie spawn batches. Adjustable at runtime.</summary>
     public float SpawnInterval { get; set; } = GameConstants.SpawnInterval;
 
+    /// <summary>
+    /// Maximum number of soldiers that fire per tick.
+    /// Reducing this below crowd size adds randomness — not every soldier fires every salvo.
+    /// </summary>
+    public int MaxConcurrentShooters { get; set; } = GameConstants.DefaultConcurrentShooters;
+
     // ── Viewport (set by renderer) ──────────────────────────────────────────
     public float ViewportWidth { get; set; } = 400f;
     public float ViewportHeight { get; set; } = 700f;
+
+    // ── Game time (accumulated, drives animations) ───────────────────────────
+    /// <summary>Total elapsed time in seconds since the game started (or last reset).</summary>
+    public float GameTime { get; set; }
 }

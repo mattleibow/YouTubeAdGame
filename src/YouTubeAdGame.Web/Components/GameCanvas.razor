@@ -87,6 +87,13 @@
                value="@((int)(_state.SpawnInterval * 1000))"
                @oninput="OnSpawnIntervalChanged" />
 
+        <div class="inspector-label">Max shooters/salvo: @_state.MaxConcurrentShooters</div>
+        <input type="range"
+               class="inspector-slider"
+               min="1" max="50"
+               value="@_state.MaxConcurrentShooters"
+               @oninput="OnMaxShootersChanged" />
+
         <div class="inspector-hint">Sliders change settings in real-time.</div>
 
         <div class="inspector-divider"></div>
@@ -98,7 +105,7 @@
             <button class="mode-arrow" @onclick="CycleModeForward">&gt;</button>
         </div>
 
-        <a class="editor-link" href="/editor">Edit Custom Map</a>
+        <a class="editor-link" href="editor">Edit Custom Map</a>
 
     </div>
 
@@ -299,6 +306,12 @@
     {
         if (int.TryParse(e.Value?.ToString(), out int ms))
             _state.SpawnInterval = ms / 1000f;
+    }
+
+    private void OnMaxShootersChanged(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out int value))
+            _state.MaxConcurrentShooters = System.Math.Max(1, value);
     }
 
     // ── Lifecycle ─────────────────────────────────────────────────────────

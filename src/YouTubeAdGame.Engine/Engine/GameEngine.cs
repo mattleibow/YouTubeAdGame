@@ -12,6 +12,7 @@ namespace YouTubeAdGame.Engine.Engine;
 public sealed class GameEngine(IInputProvider input)
 {
     private readonly SpawnSystem _spawn = new();
+    private static readonly System.Random Rng = System.Random.Shared;
 
     // ── Public API ──────────────────────────────────────────────────────────
 
@@ -23,6 +24,7 @@ public sealed class GameEngine(IInputProvider input)
         state.Wave  = 1;
         state.Distance = 0;
         state.ScrollOffset = 0;
+        state.GameTime = 0;
         state.Player.WorldX = 0;
         state.Player.Health = 3;
         state.Player.GunLevel = 0;
@@ -35,6 +37,7 @@ public sealed class GameEngine(IInputProvider input)
         state.Gates.Clear();
         state.Obstacles.Clear();
         state.PowerUps.Clear();
+        state.Barriers.Clear();
         state.FloatingTexts.Clear();
         state.Particles.Clear();
         state.ActiveEffects.Clear();
@@ -42,6 +45,7 @@ public sealed class GameEngine(IInputProvider input)
         state.GateSpawnTimer  = 0.5f;  // first gate row arrives quickly
         state.PlayerFireTimer = 0;
         state.PowerUpSpawnTimer = 3f;   // first power-up after a short delay
+        state.BarrierSpawnTimer = 15f;  // first barrier after 15 seconds
 
         // Load the map definition for the selected mode.
         // For Custom mode, preserve the caller-supplied ActiveMap (if any).
@@ -64,6 +68,8 @@ public sealed class GameEngine(IInputProvider input)
     {
         if (state.Phase != GamePhase.Playing) return;
 
+        state.GameTime += dt;
+
         var inputState = input.Poll();
 
         UpdatePlayer(state, inputState, dt);
@@ -71,6 +77,7 @@ public sealed class GameEngine(IInputProvider input)
         UpdateEnemies(state, dt);
         UpdateGateMovement(state, dt);
         UpdatePowerUps(state, dt);
+        UpdateBarriers(state, dt);
         UpdateActiveEffects(state, dt);
         UpdateEffects(state, dt);
         UpdateSpawn(state, dt);
@@ -122,30 +129,79 @@ public sealed class GameEngine(IInputProvider input)
 
     private static void FirePlayerBullets(GameState state)
     {
-        // Each soldier fires one bullet from their own world position.
-        // Gun level adds extra bullets per soldier (burst fire).
+        // Collect the positions of all visible soldiers
+        var positions = state.Crowd
+            .GetMemberPositions(state.Player.WorldX, state.Player.Depth, state.GameTime)
+            .ToList();
+        if (positions.Count == 0) return;
+
+        // Collect the closest enemies (lowest depth = nearest player) as targets
+        // Pick the top N closest, from which each shooter picks randomly
+        const int targetPoolSize = 10;
+        var targets = state.Enemies
+            .Where(e => !e.IsDestroyed)
+            .OrderBy(e => e.Depth)
+            .Take(targetPoolSize)
+            .ToList();
+
+        // How many soldiers fire this salvo?
+        int maxShooters = System.Math.Clamp(state.MaxConcurrentShooters, 1, positions.Count);
         int shotsPerSoldier = 1 + state.Player.GunLevel;
 
-        int totalBullets = 0;
-        foreach (var (wx, depth) in state.Crowd.GetMemberPositions(state.Player.WorldX, state.Player.Depth))
+        // Shuffle positions so we pick a random subset
+        for (int i = positions.Count - 1; i > 0; i--)
         {
-            for (int s = 0; s < shotsPerSoldier; s++)
+            int j = Rng.Next(i + 1);
+            (positions[i], positions[j]) = (positions[j], positions[i]);
+        }
+
+        float bulletSpeed = state.ActiveMap?.BulletSpeed ?? GameConstants.BulletSpeed;
+        int totalBullets  = 0;
+
+        for (int s = 0; s < maxShooters && s < positions.Count; s++)
+        {
+            var (wx, depth) = positions[s];
+
+            for (int burst = 0; burst < shotsPerSoldier; burst++)
             {
-                if (totalBullets >= 200) break;  // hard cap to avoid lag with huge crowds
-                state.PlayerBullets.Add(new Bullet(BulletOwner.Player, wx, depth, GameConstants.BulletSpeed));
+                if (totalBullets >= 200) goto Done; // hard cap
+
+                float vx = 0f;
+                float speed = bulletSpeed;
+
+                if (targets.Count > 0)
+                {
+                    // Aim at a random zombie from the target pool
+                    var target = targets[Rng.Next(targets.Count)];
+                    float dx = target.WorldX - wx;
+                    float dz = target.Depth  - depth;
+                    float dist = System.MathF.Sqrt(dx * dx + dz * dz);
+                    if (dist > 0.001f)
+                    {
+                        vx    = (dx / dist) * bulletSpeed;
+                        speed = (dz / dist) * bulletSpeed;
+                        if (speed < 50f) speed = 50f; // ensure bullets always move forward
+                    }
+                }
+
+                state.PlayerBullets.Add(new Bullet(BulletOwner.Player, wx, depth, speed, vx));
                 totalBullets++;
             }
-            if (totalBullets >= 200) break;
         }
+        Done:;
     }
 
     private static void UpdateBullets(GameState state, float dt)
     {
-        // Player bullets move toward far (increasing depth)
+        // Player bullets: move toward horizon (increasing depth) + optional X drift
         foreach (var b in state.PlayerBullets)
         {
-            b.Depth += b.Speed * dt;
-            if (b.Depth > GameConstants.MaxDepth) b.IsDestroyed = true;
+            b.Depth  += b.Speed     * dt;
+            b.WorldX += b.VelocityX * dt;
+            if (b.Depth > GameConstants.MaxDepth ||
+                b.WorldX < -GameConstants.WorldHalfWidth * 1.5f ||
+                b.WorldX >  GameConstants.WorldHalfWidth * 1.5f)
+                b.IsDestroyed = true;
         }
 
         // Enemy bullets move toward near (decreasing depth)
@@ -185,9 +241,7 @@ public sealed class GameEngine(IInputProvider input)
         }
     }
 
-    /// <summary>
-    /// Move gates based on their <see cref="Gate.Movement"/> style.
-    /// </summary>
+    /// <summary>Move gates based on their movement style.</summary>
     private static void UpdateGateMovement(GameState state, float dt)
     {
         float defaultSpeed = state.ActiveMap?.GateScrollSpeed ?? GameConstants.GateScrollSpeed;
@@ -214,7 +268,6 @@ public sealed class GameEngine(IInputProvider input)
                     break;
 
                 case GateMovement.Static:
-                    // Gate does not move
                     break;
             }
 
@@ -222,14 +275,29 @@ public sealed class GameEngine(IInputProvider input)
         }
     }
 
-    /// <summary>Scroll power-ups toward the player.</summary>
+    /// <summary>Scroll power-ups toward the player and animate their bob timer.</summary>
     private static void UpdatePowerUps(GameState state, float dt)
     {
         float defaultSpeed = state.ActiveMap?.GateScrollSpeed ?? GameConstants.GateScrollSpeed;
         foreach (var p in state.PowerUps)
         {
-            p.Depth -= defaultSpeed * dt;
+            p.Depth     -= defaultSpeed * dt;
+            p.BobTimer  += dt;
+            // Update WorldHeight for the bobbing animation
+            p.WorldHeight = 20f + 10f * System.MathF.Sin(p.BobTimer * 2.5f);
             if (p.Depth < -GameConstants.GateDepth) p.IsDestroyed = true;
+        }
+    }
+
+    /// <summary>Scroll barriers toward the player.</summary>
+    private static void UpdateBarriers(GameState state, float dt)
+    {
+        float defaultSpeed = state.ActiveMap?.GateScrollSpeed ?? GameConstants.GateScrollSpeed;
+        foreach (var b in state.Barriers)
+        {
+            float speed = b.ScrollSpeed > 0 ? b.ScrollSpeed : defaultSpeed;
+            b.Depth -= speed * dt;
+            if (b.Depth < -GameConstants.GateDepth) b.IsDestroyed = true;
         }
     }
 
@@ -237,9 +305,7 @@ public sealed class GameEngine(IInputProvider input)
     private static void UpdateActiveEffects(GameState state, float dt)
     {
         foreach (var effect in state.ActiveEffects)
-        {
             effect.Elapsed += dt;
-        }
         state.ActiveEffects.RemoveAll(e => e.IsExpired);
     }
 
@@ -250,7 +316,7 @@ public sealed class GameEngine(IInputProvider input)
         foreach (var ft in state.FloatingTexts)
         {
             ft.Elapsed  += dt;
-            ft.ScreenY  -= 50f * dt;  // float upward
+            ft.ScreenY  -= 50f * dt;
         }
 
         foreach (var p in state.Particles)
@@ -258,7 +324,7 @@ public sealed class GameEngine(IInputProvider input)
             p.Elapsed  += dt;
             p.ScreenX  += p.VelocityX * dt;
             p.ScreenY  += p.VelocityY * dt;
-            p.VelocityY += 120f * dt;  // gravity
+            p.VelocityY += 120f * dt;
         }
     }
 
@@ -281,7 +347,6 @@ public sealed class GameEngine(IInputProvider input)
 
                 enemy.Health -= 1f;
 
-                // BulletPierce: bullet passes through (not destroyed)
                 if (!HasActiveEffect(state, PowerUpType.BulletPierce))
                     bullet.IsDestroyed = true;
 
@@ -292,6 +357,30 @@ public sealed class GameEngine(IInputProvider input)
                     enemy.IsDestroyed = true;
                     state.Score += 50;
                     SpawnDeathEffects(state, enemy);
+                }
+                break;
+            }
+        }
+
+        // Player bullets vs barriers
+        foreach (var bullet in state.PlayerBullets)
+        {
+            if (bullet.IsDestroyed) continue;
+            foreach (var barrier in state.Barriers)
+            {
+                if (barrier.IsDestroyed) continue;
+                // Simple depth + X overlap check for barriers (rectangular)
+                float halfW = barrier.Width * 0.5f;
+                if (System.Math.Abs(bullet.WorldX - barrier.WorldX) > halfW) continue;
+                if (System.Math.Abs(bullet.Depth  - barrier.Depth)  > barrier.Height * 0.5f) continue;
+
+                bullet.IsDestroyed = true;
+                barrier.Health--;
+                if (barrier.Health <= 0)
+                {
+                    barrier.IsDestroyed = true;
+                    state.Score += 100;
+                    SpawnDeathEffects(state, barrier);
                 }
                 break;
             }
@@ -345,15 +434,32 @@ public sealed class GameEngine(IInputProvider input)
         foreach (var pu in state.PowerUps)
         {
             if (pu.IsDestroyed) continue;
-            if (!pu.IsRevealed) continue;  // can't collect if still in concrete
+            if (!pu.IsRevealed) continue;
             if (!pu.Overlaps(player)) continue;
 
             ApplyPowerUp(state, pu);
             pu.IsDestroyed = true;
         }
+
+        // Barriers vs player (barrier reaches the crowd → crush soldiers)
+        foreach (var barrier in state.Barriers)
+        {
+            if (barrier.IsDestroyed) continue;
+            if (barrier.Depth > player.Depth + player.Radius * 2f) continue;
+            if (System.Math.Abs(barrier.WorldX - player.WorldX) > barrier.Width * 0.5f + GameConstants.CrowdHalfWidth) continue;
+
+            // Barrier has reached the crowd
+            if (HasActiveEffect(state, PowerUpType.Shield))
+                RemoveActiveEffect(state, PowerUpType.Shield);
+            else
+            {
+                state.Crowd.Remove(barrier.CrowdDamage);
+                state.ScreenShake.AddTrauma(0.6f);
+            }
+            barrier.IsDestroyed = true;
+        }
     }
 
-    /// <summary>Handle a bullet hitting a shootable gate.</summary>
     private static void HandleGateHit(Gate gate)
     {
         switch (gate.OnShot)
@@ -384,7 +490,6 @@ public sealed class GameEngine(IInputProvider input)
         }
     }
 
-    /// <summary>Handle a bullet hitting a blocked power-up's concrete.</summary>
     private static void HandlePowerUpBlockHit(PowerUp pu)
     {
         switch (pu.OnShot)
@@ -401,7 +506,6 @@ public sealed class GameEngine(IInputProvider input)
         }
     }
 
-    /// <summary>Apply a collected power-up to the game state.</summary>
     private static void ApplyPowerUp(GameState state, PowerUp pu)
     {
         switch (pu.Type)
@@ -413,7 +517,6 @@ public sealed class GameEngine(IInputProvider input)
                 state.Player.GunLevel++;
                 break;
             default:
-                // Time-limited effect
                 if (pu.Duration > 0f)
                 {
                     state.ActiveEffects.Add(new ActiveEffect
@@ -432,14 +535,6 @@ public sealed class GameEngine(IInputProvider input)
             ScreenX = screenPos.x,
             ScreenY = screenPos.y - 30f
         });
-    }
-
-    private static void HitPlayer(GameState state)
-    {
-        state.Player.Health--;
-        state.Player.HitFlashTimer = 0.3f;
-        state.ScreenShake.AddTrauma(0.5f);
-        if (state.Player.Health <= 0) state.Phase = GamePhase.GameOver;
     }
 
     private static void SpawnDeathEffects(GameState state, GameObjectBase obj)
@@ -473,13 +568,13 @@ public sealed class GameEngine(IInputProvider input)
         state.Gates.RemoveAll(g => g.IsDestroyed);
         state.Obstacles.RemoveAll(o => o.IsDestroyed);
         state.PowerUps.RemoveAll(p => p.IsDestroyed);
+        state.Barriers.RemoveAll(b => b.IsDestroyed);
         state.FloatingTexts.RemoveAll(ft => ft.IsExpired);
         state.Particles.RemoveAll(p => p.IsExpired);
     }
 
     private static void CheckEndConditions(GameState state)
     {
-        // Game over when the crowd is wiped out — zombies have overrun the army
         if (state.Crowd.IsEmpty)
             state.Phase = GamePhase.GameOver;
     }
@@ -489,9 +584,7 @@ public sealed class GameEngine(IInputProvider input)
     private static bool HasActiveEffect(GameState state, PowerUpType type)
     {
         foreach (var e in state.ActiveEffects)
-        {
             if (e.Type == type && !e.IsExpired) return true;
-        }
         return false;
     }
 
