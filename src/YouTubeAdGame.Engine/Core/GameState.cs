@@ -23,6 +23,10 @@ public sealed class GameState
     /// <summary>The game mode selected from the menu.</summary>
     public GameMode Mode { get; set; } = GameMode.HordeRunner;
 
+    // ── Active map ──────────────────────────────────────────────────────────
+    /// <summary>The currently loaded map definition for the active mode.</summary>
+    public Maps.MapDefinition? ActiveMap { get; set; }
+
     // ── Score / progression ─────────────────────────────────────────────────
     public int Score { get; set; }
     public int Wave { get; set; }
@@ -40,16 +44,23 @@ public sealed class GameState
     public List<Objects.Bullet> EnemyBullets { get; } = [];
     public List<Objects.Gate> Gates { get; } = [];
     public List<Objects.Obstacle> Obstacles { get; } = [];
+    public List<Objects.PowerUp> PowerUps { get; } = [];
 
     // ── Effects ─────────────────────────────────────────────────────────────
     public Effects.ScreenShake ScreenShake { get; } = new();
     public List<Effects.FloatingText> FloatingTexts { get; } = [];
     public List<Effects.Particle> Particles { get; } = [];
 
+    /// <summary>Time-limited effects currently active on the player.</summary>
+    public List<Effects.ActiveEffect> ActiveEffects { get; } = [];
+
     // ── Spawn timers ────────────────────────────────────────────────────────
     public float EnemySpawnTimer { get; set; }
     public float GateSpawnTimer { get; set; }
     public float PlayerFireTimer { get; set; }
+
+    /// <summary>Timer for power-up spawning.</summary>
+    public float PowerUpSpawnTimer { get; set; }
 
     // ── Runtime tuning (adjustable via debug inspector) ──────────────────────
     /// <summary>Maximum simultaneous zombies on screen. Adjustable at runtime.</summary>
