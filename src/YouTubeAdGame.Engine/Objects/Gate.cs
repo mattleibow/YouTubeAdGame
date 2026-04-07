@@ -1,3 +1,5 @@
+using YouTubeAdGame.Engine.Maps;
+
 namespace YouTubeAdGame.Engine.Objects;
 
 /// <summary>Operations a gate can apply to the crowd count.</summary>
@@ -11,7 +13,7 @@ public enum GateOperation
 
 /// <summary>
 /// A gate the player can walk through to modify the crowd count.
-/// Two gates appear side by side with different operations.
+/// Gates spawn across lanes and may be open (passable) or closed (blocked).
 /// </summary>
 public sealed class Gate : GameObjectBase
 {
@@ -21,9 +23,37 @@ public sealed class Gate : GameObjectBase
     /// <summary>Which side of the road this gate occupies.</summary>
     public bool IsLeftLane { get; init; }
 
+    // ── Data-driven behaviour ───────────────────────────────────────────────
+
+    /// <summary>How the gate moves through the world.</summary>
+    public GateMovement Movement { get; init; } = GateMovement.FastScroll;
+
+    /// <summary>Scroll speed override (depth-units / sec). 0 = use map default.</summary>
+    public float ScrollSpeed { get; init; }
+
+    /// <summary>Whether the gate is currently passable.</summary>
+    public bool IsOpen { get; set; } = true;
+
+    /// <summary>What happens when a bullet hits this gate.</summary>
+    public GateHitBehavior OnShot { get; init; } = GateHitBehavior.Nothing;
+
+    /// <summary>Remaining bullet hits before <see cref="OnShot"/> triggers (for Open/Destroy/Counter).</summary>
+    public int HitsRemaining { get; set; }
+
+    /// <summary>
+    /// Visible counter for <see cref="GateHitBehavior.IncrementCounter"/> gates.
+    /// </summary>
+    public int HitCounter { get; set; }
+
+    /// <summary>Timer used for <see cref="GateMovement.Oscillate"/> movement.</summary>
+    public float OscillateTimer { get; set; }
+
+    /// <summary>Centre X of the lane this gate was spawned in (used for oscillation).</summary>
+    public float LaneCenterX { get; init; }
+
     public Gate()
     {
-        Radius = Core.GameConstants.GateWidth * 0.5f;
+        Radius = Core.GameConstants.GateCollisionRadius;
     }
 
     /// <summary>Human-readable label shown on the gate, e.g. "+20" or "×3".</summary>
@@ -32,7 +62,7 @@ public sealed class Gate : GameObjectBase
         GateOperation.Add        => $"+{Operand}",
         GateOperation.Subtract   => $"-{Operand}",
         GateOperation.Multiply   => $"×{Operand}",
-        GateOperation.UpgradeGun => "⬆ GUN",
+        GateOperation.UpgradeGun => "GUN UP",
         _                        => "?"
     };
 

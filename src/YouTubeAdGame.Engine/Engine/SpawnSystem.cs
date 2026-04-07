@@ -1,10 +1,13 @@
 using YouTubeAdGame.Engine.Core;
+using YouTubeAdGame.Engine.Maps;
 using YouTubeAdGame.Engine.Objects;
 
 namespace YouTubeAdGame.Engine.Engine;
 
 /// <summary>
-/// Handles timed spawning of enemies, bosses, gates, and obstacles.
+/// Handles timed spawning of enemies, bosses, gates, obstacles, and power-ups.
+/// Reads gate/power-up palettes from <see cref="GameState.ActiveMap"/> when available,
+/// falling back to hard-coded defaults when no map is loaded.
 /// </summary>
 internal sealed class SpawnSystem
 {
@@ -12,128 +15,350 @@ internal sealed class SpawnSystem
 
     public void Update(GameState state, float dt)
     {
+        var map = state.ActiveMap;
+
         // Enemies
         state.EnemySpawnTimer -= dt;
         if (state.EnemySpawnTimer <= 0f)
         {
-            SpawnEnemyWave(state);
-            // Gradually reduce interval as waves progress, minimum 0.5 s
-            float interval = System.Math.Max(0.5f,
-                GameConstants.SpawnInterval - state.Wave * 0.05f);
+            SpawnZombieBatch(state);
+            // Use the runtime-adjustable interval; wave pressure gradually increases spawn rate
+            float interval = System.Math.Max(0.05f,
+                state.SpawnInterval - state.Wave * 0.004f);
             state.EnemySpawnTimer = interval;
         }
 
         // Gates
+        float gateInterval = map?.GateSpawnInterval ?? GameConstants.GateSpawnInterval;
         state.GateSpawnTimer -= dt;
         if (state.GateSpawnTimer <= 0f)
         {
-            SpawnGatePair(state);
-            state.GateSpawnTimer = GameConstants.GateSpawnInterval;
+            SpawnGateRow(state);
+            state.GateSpawnTimer = gateInterval;
         }
 
-        // Advance wave every 15 seconds
+        // Power-ups
+        float powerUpInterval = map?.PowerUpSpawnInterval ?? 0f;
+        if (powerUpInterval > 0f && map?.PowerUpPalette.Count > 0)
+        {
+            state.PowerUpSpawnTimer -= dt;
+            if (state.PowerUpSpawnTimer <= 0f)
+            {
+                SpawnPowerUp(state, map);
+                state.PowerUpSpawnTimer = powerUpInterval;
+            }
+        }
+
+        // Barriers — spawn every ~15 s, scaled by wave
+        const float barrierBaseInterval = 15f;
+        float barrierInterval = System.Math.Max(5f, barrierBaseInterval - state.Wave * 1.5f);
+        state.BarrierSpawnTimer -= dt;
+        if (state.BarrierSpawnTimer <= 0f)
+        {
+            SpawnBarrier(state);
+            state.BarrierSpawnTimer = barrierInterval;
+        }
+
+        // Advance wave every 1800 distance units
         state.Wave = 1 + (int)(state.Distance / 1800f);
     }
 
     /// <summary>
-    /// Pre-populate a large horde spread across the full depth range so the player
-    /// sees the vast crowd immediately on game start.
+    /// No initial horde — enemies stream in one at a time from the horizon.
     /// </summary>
     public void SpawnInitialHorde(GameState state)
     {
-        const int count = 50;
-        for (int i = 0; i < count; i++)
-        {
-            float depth = 250f + (float)Rng.NextDouble() * (GameConstants.SpawnDepth - 250f);
-            float x     = (float)(Rng.NextDouble() * 2.0 - 1.0)
-                          * (GameConstants.WorldHalfWidth - GameConstants.EnemyRadius);
-            state.Enemies.Add(new Enemy
-            {
-                WorldX = x,
-                Depth  = depth,
-                Speed  = GameConstants.EnemySpeed + (float)(Rng.NextDouble() * 20.0 - 10.0)
-            });
-        }
+        // Intentionally empty: the horde streams in via SpawnEnemyWave.
     }
 
-    private static void SpawnEnemyWave(GameState state)
+    private static void SpawnZombieBatch(GameState state)
     {
-        // Scale horde size with wave — starts large, keeps growing
-        int desired = System.Math.Min(10 + state.Wave * 3, 30);
+        // Spawn a whole batch of zombies at the horizon to create a sea effect
+        int capacity = state.MaxEnemiesOnScreen - state.Enemies.Count;
+        if (capacity <= 0) return;
 
-        // Respect the on-screen cap so we don't flood the engine
-        int available = GameConstants.MaxEnemiesOnScreen - state.Enemies.Count;
-        int count = System.Math.Min(desired, available);
-        if (count <= 0) return;
+        int toSpawn = System.Math.Min(
+            state.ActiveMap?.ZombiesPerSpawn ?? GameConstants.ZombiesPerSpawn,
+            capacity);
+        float spread = GameConstants.WorldHalfWidth - GameConstants.EnemyRadius;
+        float baseSpeed = state.ActiveMap?.EnemySpeed ?? GameConstants.EnemySpeed;
 
-        for (int i = 0; i < count; i++)
+        // Apply wave definition speed multiplier if present
+        float speedMultiplier = 1f;
+        if (state.ActiveMap is { Waves.Count: > 0 } map2)
         {
-            float x = (float)(Rng.NextDouble() * 2.0 - 1.0)
-                      * (GameConstants.WorldHalfWidth - GameConstants.EnemyRadius);
-            // Stagger enemies at different depths so they arrive in waves, not a wall
-            float depthJitter = (float)(Rng.NextDouble() * 150.0);
+            foreach (var wd in map2.Waves)
+            {
+                if (wd.WaveNumber == state.Wave)
+                {
+                    speedMultiplier = wd.EnemySpeedMultiplier;
+                    break;
+                }
+            }
+        }
+
+        for (int i = 0; i < toSpawn; i++)
+        {
+            float x = (float)(Rng.NextDouble() * 2.0 - 1.0) * spread;
+            float depthJitter = (float)(Rng.NextDouble() * 30.0);  // stagger depth slightly
             state.Enemies.Add(new Enemy
             {
                 WorldX = x,
                 Depth  = GameConstants.SpawnDepth - depthJitter,
-                // Small random ±10 speed variation around the base, always valid
-                Speed  = GameConstants.EnemySpeed + (float)(Rng.NextDouble() * 20.0 - 10.0) + state.Wave * 2f
+                Speed  = baseSpeed * speedMultiplier + (float)(Rng.NextDouble() * 10.0 - 5.0)
             });
         }
     }
 
-    private static void SpawnGatePair(GameState state)
+    private static void SpawnGateRow(GameState state)
     {
-        // Always spawn two gates — one on each side of the road
+        var map = state.ActiveMap;
+        int laneCount = map?.LaneCount ?? GameConstants.LaneCount;
+        float laneWidth = map?.LaneWidth ?? GameConstants.LaneWidth;
         float depth = GameConstants.SpawnDepth - 30f;
-        float laneOffset = GameConstants.WorldHalfWidth * 0.45f;
 
-        var leftOp  = ChooseOperation(state, leftLane: true);
-        var rightOp = ChooseOperation(state, leftLane: false);
-
-        state.Gates.Add(new Gate
+        for (int lane = 0; lane < laneCount; lane++)
         {
-            WorldX      = -laneOffset,
-            Depth       = depth,
-            Operation   = leftOp.op,
-            Operand     = leftOp.operand,
-            IsLeftLane  = true,
-            Radius      = GameConstants.GateWidth * 0.5f
-        });
+            float laneCenter = -GameConstants.WorldHalfWidth
+                + laneWidth * 0.5f
+                + lane * laneWidth;
 
-        state.Gates.Add(new Gate
+            bool isLeftLane = lane == 0;
+
+            if (map is not null && map.GatePalette.Count > 0)
+            {
+                var def = PickGateDefinition(map, state.Wave, isLeftLane);
+                if (def is null) continue;
+
+                int operand = def.OperandRange.Min == def.OperandRange.Max
+                    ? def.OperandRange.Min
+                    : Rng.Next(def.OperandRange.Min, def.OperandRange.Max + 1);
+
+                float scrollSpeed = def.ScrollSpeed ?? map.GateScrollSpeed;
+
+                state.Gates.Add(new Gate
+                {
+                    WorldX       = laneCenter,
+                    Depth        = depth,
+                    Operation    = def.Operation,
+                    Operand      = operand,
+                    IsLeftLane   = isLeftLane,
+                    Movement     = def.MovementStyle,
+                    ScrollSpeed  = scrollSpeed,
+                    IsOpen       = def.IsOpen,
+                    OnShot       = def.OnShot,
+                    HitsRemaining = def.HitsToOpen,
+                    LaneCenterX  = laneCenter
+                });
+            }
+            else
+            {
+                // Fallback: original hard-coded behaviour
+                var (op, operand) = ChooseOperationFallback(state, leftLane: isLeftLane);
+                state.Gates.Add(new Gate
+                {
+                    WorldX     = laneCenter,
+                    Depth      = depth,
+                    Operation  = op,
+                    Operand    = operand,
+                    IsLeftLane = isLeftLane,
+                    LaneCenterX = laneCenter
+                });
+            }
+        }
+    }
+
+    /// <summary>
+    /// Pick a gate definition from the map palette using weighted random selection,
+    /// filtered by the current wave and lane constraints.
+    /// </summary>
+    private static GateDefinition? PickGateDefinition(MapDefinition map, int wave, bool isLeftLane)
+    {
+        // Cache available gates to avoid iterating the palette twice
+        List<GateDefinition>? available = null;
+        float totalWeight = 0f;
+
+        foreach (var g in map.GatePalette)
         {
-            WorldX      = laneOffset,
-            Depth       = depth,
-            Operation   = rightOp.op,
-            Operand     = rightOp.operand,
-            IsLeftLane  = false,
-            Radius      = GameConstants.GateWidth * 0.5f
+            if (!IsAvailable(g, wave, isLeftLane)) continue;
+            available ??= [];
+            available.Add(g);
+            totalWeight += g.SpawnWeight;
+        }
+
+        if (available is null || totalWeight <= 0f) return null;
+
+        float roll = (float)(Rng.NextDouble() * totalWeight);
+        float cumulative = 0f;
+        foreach (var g in available)
+        {
+            cumulative += g.SpawnWeight;
+            if (roll < cumulative) return g;
+        }
+
+        // Return the last available gate (always valid since we filtered above)
+        return available[^1];
+    }
+
+    private static bool IsAvailable(GateDefinition def, int wave, bool isLeftLane)
+    {
+        if (def.MinWave.HasValue && wave < def.MinWave.Value) return false;
+        if (def.MaxWave.HasValue && wave > def.MaxWave.Value) return false;
+        if (def.LeftLaneOnly && !isLeftLane) return false;
+        return true;
+    }
+
+    /// <summary>
+    /// Spawn a single power-up in a random lane at the horizon.
+    /// </summary>
+    private static void SpawnPowerUp(GameState state, MapDefinition map)
+    {
+        var def = PickPowerUpDefinition(map, state.Wave);
+        if (def is null) return;
+
+        int laneCount = map.LaneCount;
+        float laneWidth = map.LaneWidth;
+        int lane = Rng.Next(laneCount);
+        float laneCenter = -GameConstants.WorldHalfWidth
+            + laneWidth * 0.5f
+            + lane * laneWidth;
+
+        state.PowerUps.Add(new PowerUp
+        {
+            WorldX            = laneCenter,
+            Depth             = GameConstants.SpawnDepth - 30f,
+            Type              = def.Type,
+            Duration          = def.Duration,
+            IsBlocked         = def.IsBlocked,
+            BlockHitsRemaining = def.BlockHealth,
+            OnShot            = def.OnShot,
+            CounterThreshold  = def.CounterThreshold
         });
     }
 
-    private static (GateOperation op, int operand) ChooseOperation(GameState state, bool leftLane)
+    private static PowerUpDefinition? PickPowerUpDefinition(MapDefinition map, int wave)
     {
-        // Mix of operations based on crowd size
-        int crowd = state.Crowd.Count;
+        List<PowerUpDefinition>? available = null;
+        float totalWeight = 0f;
 
-        GateOperation[] ops = crowd >= 20
-            ? [GateOperation.Add, GateOperation.Multiply, GateOperation.Subtract]
-            : [GateOperation.Add, GateOperation.Add, GateOperation.Multiply];
-
-        var op = ops[Rng.Next(ops.Length)];
-        int operand = op switch
+        foreach (var p in map.PowerUpPalette)
         {
-            GateOperation.Add      => Rng.Next(5, 25),
-            GateOperation.Subtract => Rng.Next(2, 10),
-            GateOperation.Multiply => Rng.Next(2, 4),
-            _                      => 0
-        };
+            if (!IsAvailable(p, wave)) continue;
+            available ??= [];
+            available.Add(p);
+            totalWeight += p.SpawnWeight;
+        }
 
-        // Occasionally offer gun upgrade on the left lane
-        if (leftLane && Rng.NextDouble() < 0.15)
+        if (available is null || totalWeight <= 0f) return null;
+
+        float roll = (float)(Rng.NextDouble() * totalWeight);
+        float cumulative = 0f;
+        foreach (var p in available)
+        {
+            cumulative += p.SpawnWeight;
+            if (roll < cumulative) return p;
+        }
+
+        return available[^1];
+    }
+
+    private static bool IsAvailable(PowerUpDefinition def, int wave)
+    {
+        if (def.MinWave.HasValue && wave < def.MinWave.Value) return false;
+        if (def.MaxWave.HasValue && wave > def.MaxWave.Value) return false;
+        return true;
+    }
+
+    private static void SpawnBarrier(GameState state)
+    {
+        // Spawn a barrier in a random lane or spanning multiple lanes
+        int laneCount = state.ActiveMap?.LaneCount ?? GameConstants.LaneCount;
+        float laneWidth = state.ActiveMap?.LaneWidth ?? GameConstants.LaneWidth;
+
+        // Randomly choose 1 to 2 lanes wide
+        int lanesWide = Rng.Next(1, 3);
+        int startLane = Rng.Next(0, laneCount - lanesWide + 1);
+
+        float leftEdge  = -GameConstants.WorldHalfWidth + startLane * laneWidth;
+        float rightEdge = leftEdge + lanesWide * laneWidth;
+        float centerX   = (leftEdge + rightEdge) * 0.5f;
+        float width     = rightEdge - leftEdge - 10f;
+
+        int health = 3 + state.Wave * 2;
+
+        state.Barriers.Add(new Objects.Barrier
+        {
+            WorldX      = centerX,
+            Depth       = GameConstants.SpawnDepth - 30f,
+            Width       = width,
+            Height      = 50f,
+            Health      = health,
+            MaxHealth   = health,
+            CrowdDamage = lanesWide * 2,
+            ScrollSpeed = 0f,
+            Radius      = width * 0.5f
+        });
+    }
+
+    /// <summary>Original hard-coded gate choice logic — used when no ActiveMap is loaded.</summary>
+    private static (GateOperation op, int operand) ChooseOperationFallback(GameState state, bool leftLane)
+    {
+        int crowd = state.Crowd.Count;
+        int wave  = state.Wave;
+
+        // Gun upgrade chance scales up with wave (max 25%)
+        float gunChance = System.Math.Min(0.10f + wave * 0.02f, 0.25f);
+        if (leftLane && Rng.NextDouble() < gunChance)
             return (GateOperation.UpgradeGun, 0);
 
-        return (op, operand);
+        // Gate operands scale with wave: small values early, larger as game progresses
+        if (wave <= 2)
+        {
+            GateOperation[] ops = crowd <= 5
+                ? [GateOperation.Add, GateOperation.Add, GateOperation.Multiply]
+                : [GateOperation.Add, GateOperation.Multiply, GateOperation.Subtract];
+
+            var op = ops[Rng.Next(ops.Length)];
+            int operand = op switch
+            {
+                GateOperation.Add      => Rng.Next(1, 3),
+                GateOperation.Subtract => 1,
+                GateOperation.Multiply => 2,
+                _                      => 0
+            };
+            return (op, operand);
+        }
+        else if (wave <= 5)
+        {
+            GateOperation[] ops = crowd >= 10
+                ? [GateOperation.Add, GateOperation.Multiply, GateOperation.Subtract]
+                : [GateOperation.Add, GateOperation.Add, GateOperation.Multiply];
+
+            var op = ops[Rng.Next(ops.Length)];
+            int operand = op switch
+            {
+                GateOperation.Add      => Rng.Next(2, 6),
+                GateOperation.Subtract => Rng.Next(1, 3),
+                GateOperation.Multiply => Rng.Next(2, 4),
+                _                      => 0
+            };
+            return (op, operand);
+        }
+        else
+        {
+            GateOperation[] ops = crowd >= 20
+                ? [GateOperation.Add, GateOperation.Multiply, GateOperation.Subtract]
+                : [GateOperation.Add, GateOperation.Add, GateOperation.Multiply];
+
+            var op = ops[Rng.Next(ops.Length)];
+            int operand = op switch
+            {
+                GateOperation.Add      => Rng.Next(5, 25),
+                GateOperation.Subtract => Rng.Next(2, 10),
+                GateOperation.Multiply => Rng.Next(2, 4),
+                _                      => 0
+            };
+            return (op, operand);
+        }
     }
 }

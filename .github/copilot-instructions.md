@@ -1,11 +1,93 @@
 # GitHub Copilot Instructions
 
+> **⚠️ Keep these instructions up to date.**
+> Every time you add a feature, change behaviour, or update architecture, edit this file as part of the same PR.
+> This file is the single source of truth for all agents working on this repository.
+> See [Keeping These Instructions Up to Date](#keeping-these-instructions-up-to-date) at the bottom for the rule.
+
 ## Project Overview
 
 **Crowd Runner – YouTube Ad Game** is a pseudo-3D top-down shooter runner built with:
 - **Blazor WebAssembly** (.NET 10, C# 14) for the browser host
 - **SkiaSharp 3.x** for all rendering (2D canvas with perspective projection)
 - No game framework — all engine logic is hand-written in C#
+
+### Core Concept — Army vs Zombies
+
+The player commands a **crowd of soldiers** marching down the road toward an endless **horde of zombies**.
+
+- **Soldiers** (the player's crowd): automatically fire bullets — the more soldiers, the more bullets and the wider the spread. Gun-level gates multiply bullet density further. Soldiers are the "lives" — lose them all and it's game over. The player **starts with 1 soldier** and builds up through gates.
+- **Zombies** (enemies): shuffle toward the player at a constant base speed. They **never fire**. When a zombie reaches the player they consume one soldier and die.
+- Gates on the road offer math operations (`+1`, `+2`, `×2` in early waves; larger in later waves) to gain/lose soldiers, or gun upgrades. Gate rewards scale with the current wave.
+
+### Game Modes
+
+The main menu shows all available game modes. Use the **< >** arrows in the inspector panel (or ← → keyboard keys on the menu screen) to cycle through modes. Each mode is defined by a `MapDefinition` in `Maps/MapRegistry.cs`. `MapRegistry.GetAll()` returns the ordered list of built-in modes.
+
+| Mode | Lanes | Gate speed | Bullet speed | Notes |
+|------|-------|-----------|-------------|-------|
+| **Horde Runner** | 3 | 150 depth/s | 1400 | Default. Vast zombie hordes, fast gates |
+| **Blitz** | 3 | 200 depth/s | 1680 | 80% faster enemies, 60 ms spawn interval, rapid power-ups |
+| **Survival** | 3 | 120 depth/s | 1400 | Starts slow but enemy speed multiplies every wave |
+| **Custom** | any | configurable | configurable | Fully user-defined via the Map Editor |
+
+New built-in modes are added by: (1) extending `GameMode` enum, (2) adding a `MapDefinition` property to `MapRegistry`, (3) including it in `GetAll()`. No engine/spawn/renderer changes required.
+
+### Custom Mode & Map Editor
+
+A full in-browser **Map Editor** is accessible from the inspector panel ("Edit Custom Map" link) or by navigating to `/editor`. It covers every configurable aspect of a `MapDefinition`:
+
+- **Basic Settings** — name, description, road config, player speed/bullet/fire-rate, enemy tuning, gate tuning, power-up interval
+- **Gates tab** — full palette editor: add/remove gates, set operation, operand range, movement style, on-shot behaviour, wave filters, spawn weight
+- **Power-Ups tab** — full palette editor: add/remove power-ups, set type, duration, concrete wrapping, wave filters
+- **Import/Export tab** — download JSON, paste/import JSON, manage named saves, set active map
+
+Saved maps are stored in browser **localStorage** under keys prefixed `crowdrunner_`. The active custom map is at `crowdrunner_active_custom`. The `CustomMapService` (Web) wraps all JS interop; `MapSerializer` (Engine) handles JSON serialization using `System.Text.Json` with string enum names.
+
+When the user selects **Custom** mode and starts a game, `GameEngine.StartGame` preserves the pre-loaded `state.ActiveMap` instead of overwriting it with a registry map.
+
+
+### Data-Driven Map System
+
+Each `MapDefinition` (in `Maps/`) contains:
+- **Road/lane config**: lane count, lane width
+- **Player tuning**: speed, bullet speed, fire rate
+- **Enemy tuning**: base speed, max enemies, spawn interval
+- **Gate tuning**: scroll speed, spawn interval
+- **GatePalette**: list of `GateDefinition` records (operation, operand range, movement style, open/closed, on-shot behaviour, wave filters, spawn weight)
+- **PowerUpPalette**: list of `PowerUpDefinition` records (type, duration, blocked/concrete, block health, on-shot behaviour, wave filters, spawn weight)
+- **Waves**: optional per-wave overrides (speed multipliers, spawn rate, available gates/power-ups)
+
+### Gate Behaviour System
+
+Gates now support configurable behaviours beyond simple pass-through:
+
+| Property | Options | Description |
+|----------|---------|-------------|
+| `Movement` | `Static`, `ScrollWithWorld`, `FastScroll`, `Oscillate` | How the gate moves |
+| `IsOpen` | `true`/`false` | Whether the gate starts passable or blocked |
+| `OnShot` | `Nothing`, `Open`, `Close`, `Toggle`, `Destroy`, `IncrementCounter` | What happens when shot |
+| `HitsToOpen` | int | Shots needed to open/destroy |
+
+Closed gates display a grey locked appearance. Shooting a gate with `OnShot != Nothing` decrements its hit counter.
+
+### Power-Up System
+
+Power-ups are collectible objects that grant time-limited effects or instant bonuses:
+
+| Type | Duration | Effect |
+|------|----------|--------|
+| `SpeedBoost` | 4s | 1.5× player movement speed |
+| `Shield` | 6s | Absorbs one zombie hit |
+| `RapidFire` | 5s | 0.4× fire rate (faster shooting) |
+| `BulletPierce` | varies | Bullets pass through enemies |
+| `ExtraSoldiers` | instant | +5 soldiers |
+| `SlowEnemies` | 4s | Enemies move at 0.4× speed |
+| `FreezeEnemies` | varies | Enemies stop moving |
+
+Power-ups may be wrapped in **concrete blocks** that require shooting to break. `BlockHealth` controls hits needed; `OnShot` can be `BreakConcrete` or `IncrementCounter`.
+
+Active effects are tracked in `GameState.ActiveEffects` and rendered as timer bars in the HUD.
 
 ## Repository Structure
 
@@ -15,12 +97,13 @@ src/
 ├── YouTubeAdGame.Engine/              ← platform-independent class library
 │   ├── Core/                          ← GameState, GameConstants, IRenderer, IInputProvider
 │   ├── Math/                          ← Camera (pseudo-3D projection), MathHelper
-│   ├── Objects/                       ← Player, Enemy, Boss, Bullet, Gate, Obstacle, Crowd
-│   ├── Effects/                       ← ScreenShake, FloatingText, Particle
+│   ├── Objects/                       ← Player, Enemy, Boss, Bullet, Gate, Obstacle, Crowd, PowerUp
+│   ├── Effects/                       ← ScreenShake, FloatingText, Particle, ActiveEffect
 │   ├── Engine/                        ← GameEngine (update loop), SpawnSystem
+│   ├── Maps/                          ← MapDefinition, GateDefinition, PowerUpDefinition, WaveDefinition, MapRegistry
 │   └── Rendering/                     ← SkiaGameRenderer
 └── YouTubeAdGame.Web/                 ← Blazor WebAssembly host
-    ├── Components/GameCanvas.razor    ← SKCanvasView + 60 Hz PeriodicTimer game loop
+    ├── Components/GameCanvas.razor    ← SKCanvasView + 60 Hz game loop + debug inspector
     ├── Input/BlazorInputProvider.cs   ← mouse/touch/keyboard → IInputProvider
     └── Pages/Home.razor               ← full-screen game page
 .github/workflows/deploy.yml          ← CI build + GitHub Pages deploy
@@ -41,7 +124,7 @@ IRenderer.Render(canvas, state)  →  SkiaGameRenderer
 
 - **GameState** is the only mutable shared object; it is passed by reference into every update and render call.
 - **GameEngine.Update(GameState, float dt)** runs at 60 Hz (fixed timestep via `PeriodicTimer` in `GameCanvas.razor`).
-- **SpawnSystem** controls enemy waves and gate spawning.
+- **SpawnSystem** controls enemy streaming and gate spawning.
 - **SkiaGameRenderer** performs all drawing using SkiaSharp `SKCanvas`.
 
 ### Pseudo-3D Camera
@@ -52,6 +135,87 @@ Objects carry a **depth** value (0 = at the player, 1000 = horizon). `Camera.cs`
 - `scale`   = lerp(NearScale, FarScale, t)
 - `screenX` = centreX + worldX × (screenHalfWidth / worldHalfWidth)
 
+### 3-Lane Road & Gate System
+
+The road is divided into **3 equal lanes** (`LaneCount = 3`, each `LaneWidth = 200` world-units):
+
+| Lane | Center worldX | Range |
+|------|--------------|-------|
+| Left | −200 | −300 to −100 |
+| Center | 0 | −100 to +100 |
+| Right | +200 | +100 to +300 |
+
+Gates spawn as a **full row** of 3 (one per lane), each `GateWidth = 190` wide (filling the lane). The player chooses which lane to be in to pick a gate. Gates scroll toward the player at `GateScrollSpeed = 150` depth/sec — **3× faster** than zombies (`EnemySpeed = 50`). This creates urgency: gates rush past the zombie horde and reach the player quickly.
+
+Gate collision uses `GateCollisionRadius = 80` (circle-based) which prevents cross-lane triggering while covering most of the lane width.
+
+### Zombie Spawning — Sea-of-Zombies Model
+
+Zombies spawn in **batches** (`GameConstants.ZombiesPerSpawn = 8`) every `state.SpawnInterval` seconds (default 100 ms) from the far horizon (`SpawnDepth`). Each zombie in the batch gets a slight random depth jitter so they don't all appear on the same line. The field builds up rapidly into a sea effect.
+
+- `state.MaxEnemiesOnScreen` (default 500, max slider 1–1000) caps the total zombie count.
+- `state.SpawnInterval` (default 0.1 s, slider range 50–2000 ms) is runtime-adjustable via the inspector.
+- Wave progression increases spawn pressure: `max(0.05s, SpawnInterval - Wave × 0.004s)`.
+- All zombies move at the same base speed (`EnemySpeed = 50` ± small random jitter) — no per-wave speed bonus, so movement is visually consistent.
+
+### Wave Progression & Gate Rewards
+
+The wave advances based on distance: `Wave = 1 + int(Distance / 1800)`. Gate operands scale with wave:
+
+| Wave | Add | Multiply | Subtract | Gun upgrade chance |
+|------|-----|----------|----------|--------------------|
+| 1–2  | +1 or +2 | ×2 | -1 | 12–14% |
+| 3–5  | +2 to +5 | ×2 or ×3 | -1 or -2 | 16–20% |
+| 6+   | +5 to +24 | ×2 or ×3 | -2 to -9 | 22–25% |
+
+Subtract gates appear only when the crowd is large enough (≥10 in mid/late game). Gun upgrades are offered only on the left-lane gate, with a chance that scales up each wave.
+
+### Crowd-Based Firing & Collision
+
+The player's soldiers fire automatically every `PlayerFireRate` seconds. Each visible soldier fires one bullet from their own world position:
+
+```
+shotsPerSoldier = 1 + GunLevel   (burst fire per soldier)
+totalBullets    = min(visible soldiers × shotsPerSoldier, 200)
+```
+
+Bullets originate from each soldier's individual position in the crowd formation. Gun-level gates increase shots per soldier (burst fire). There are **no enemy bullets** — zombies only move.
+
+**Bullet–zombie collision:** each bullet is consumed on the first hit (one bullet kills one zombie). Bullets normally do **not** pass through enemies, but the `BulletPierce` power-up allows bullets to pierce through multiple enemies. Killing a zombie awards score points but does **not** add soldiers — the only way to gain soldiers is through gates.
+
+### Player / Crowd Boundary
+
+The player's horizontal position is clamped to `±(WorldHalfWidth − CrowdHalfWidth)` so the entire crowd formation stays within road edges at all times.
+
+### Debug Inspector Panel
+
+`GameCanvas.razor` renders a dark sidebar beside the game canvas that shows live:
+
+| Stat | Description |
+|------|-------------|
+| Phase / Wave / Score / Distance | Overall game progression |
+| Soldiers | `state.Crowd.Count` |
+| Zombies | `state.Enemies.Count` |
+| Bullets | `state.PlayerBullets.Count` |
+| Particles | `state.Particles.Count` |
+| Max zombies slider | Mutates `state.MaxEnemiesOnScreen` in real time (1–1000) |
+| Spawn delay slider | Mutates `state.SpawnInterval` in real time (50–2000 ms) |
+
+Inspector labels use plain ASCII — no emoji (default SkiaSharp font does not support emoji).
+
+Stats refresh every 10 game frames (~6 Hz) via `InvokeAsync(StateHasChanged)`.  
+Layout: `.page-layout` flex row → `.game-container` (flex: 1) + `.inspector-panel` (200 px fixed width).
+
+## CI / Deployment
+
+`.github/workflows/deploy.yml` builds and publishes the Blazor WASM app to **GitHub Pages**.
+
+The **deploy job** runs when:
+- Pushing to `main` or `master`, **or**
+- A **pull request** is open and has the `deploy` label.
+
+This means you can preview any PR branch on GitHub Pages simply by adding the `deploy` label — no merge required.
+
 ## Coding Conventions
 
 - **C# 14 / .NET 10** — use the latest language features (primary constructors, collection expressions `[]`, raw string literals, etc.).
@@ -60,6 +224,7 @@ Objects carry a **depth** value (0 = at the player, 1000 = horizon). `Camera.cs`
 - **File-scoped namespaces** — every `.cs` file uses `namespace Foo.Bar;` (no braces).
 - **XML doc comments** on all `public` members — use `/// <summary>…</summary>` style.
 - **Constants in `GameConstants.cs`** — all numeric tuning values (speeds, radii, timers, etc.) must be defined as `public const float` in `GameConstants`. Never use magic numbers inline.
+- **Runtime tuning via `GameState`** — values that the player/developer needs to adjust at runtime (e.g. `MaxEnemiesOnScreen`) live as mutable properties on `GameState`, defaulting to a `GameConstants` value. Do not hard-code them at the call site.
 - **No platform code in Engine** — `YouTubeAdGame.Engine` must not reference Blazor, ASP.NET, or any browser API. Keep it portable (MAUI, WPF, desktop compatible).
 - **SkiaSharp paint reuse** — create `SKPaint` objects once and reuse them; avoid allocating new paints inside the render loop.
 - **Game objects inherit `GameObjectBase`** — new world objects should extend `GameObjectBase` and be stored in the appropriate `List<T>` on `GameState`.
@@ -68,16 +233,32 @@ Objects carry a **depth** value (0 = at the player, 1000 = horizon). `Camera.cs`
 
 | File | Purpose |
 |------|---------|
-| `Core/GameConstants.cs` | All tuning constants |
-| `Core/GameState.cs` | All mutable runtime state |
+| `Core/GameConstants.cs` | All tuning constants (default values) |
+| `Core/GameState.cs` | All mutable runtime state, including runtime-adjustable tuning properties |
+| `Core/GameMode.cs` | Game mode enum — HordeRunner, Blitz, Survival, Custom |
 | `Core/IInputProvider.cs` | Input abstraction + `InputState` |
 | `Core/IRenderer.cs` | Rendering abstraction |
 | `Math/Camera.cs` | Pseudo-3D projection math |
 | `Engine/GameEngine.cs` | Fixed-timestep update, collision, end-conditions |
-| `Engine/SpawnSystem.cs` | Wave and gate spawning |
+| `Engine/SpawnSystem.cs` | Zombie batch spawning, gate spawning, power-up spawning |
+| `Maps/MapDefinition.cs` | Top-level data-driven mode configuration |
+| `Maps/GateDefinition.cs` | Gate behavior template (movement, on-shot, open/closed) |
+| `Maps/PowerUpDefinition.cs` | Power-up behavior template (type, duration, blocked, on-shot) |
+| `Maps/WaveDefinition.cs` | Per-wave tuning overrides |
+| `Maps/OperandRange.cs` | Serializable integer range replacing value-tuple |
+| `Maps/MapRegistry.cs` | Factory: `GameMode` → `MapDefinition`; `GetAll()` for all built-in modes |
+| `Maps/MapSerializer.cs` | JSON serialization/deserialization for `MapDefinition` |
+| `Objects/Gate.cs` | Runtime gate object with data-driven behaviour properties |
+| `Objects/PowerUp.cs` | Collectable power-up (optionally wrapped in concrete block) |
+| `Effects/ActiveEffect.cs` | Time-limited player buff (shield, rapid fire, etc.) |
 | `Rendering/SkiaGameRenderer.cs` | Full scene rendering |
-| `Components/GameCanvas.razor` | 60 Hz loop, SKCanvasView wiring |
+| `Components/GameCanvas.razor` | 60 Hz loop, SKCanvasView wiring, debug inspector panel, mode cycling |
+| `Pages/MapEditorPage.razor` | Full custom-map editor at `/editor` route |
+| `Services/CustomMapService.cs` | Browser localStorage persistence for custom maps |
 | `Input/BlazorInputProvider.cs` | Browser input → `IInputProvider` |
+| `wwwroot/css/app.css` | Global styles including editor page styles |
+| `wwwroot/js/storage.js` | JS localStorage helpers + JSON download trigger |
+| `.github/workflows/deploy.yml` | CI build + conditional GitHub Pages deploy |
 
 ## Build & Run
 
@@ -93,8 +274,26 @@ dotnet run --project src/YouTubeAdGame.Web
 | Feature | Where to add |
 |---------|-------------|
 | New weapon | `Engine/GameEngine.cs` + `Rendering/SkiaGameRenderer.cs` |
+| New game mode | Add variant to `Core/GameMode.cs`; add a `MapDefinition` to `Maps/MapRegistry.cs` — no engine/spawn/renderer changes needed |
 | New enemy behaviour | `Objects/Enemy.cs` + `Engine/SpawnSystem.cs` |
 | New gate operation | `Objects/Gate.cs` `GateOperation` enum |
+| New gate movement / hit behaviour | `Maps/GateMovement.cs`, `Maps/GateHitBehavior.cs` enums; handle in `GameEngine.UpdateGateMovement` / `HandleGateHit` |
+| New power-up type | `Maps/PowerUpType.cs` enum; handle in `GameEngine.ApplyPowerUp` / `UpdatePlayer` / `UpdateEnemies` |
 | New visual effect | `Effects/` + `Rendering/SkiaGameRenderer.cs` |
+| New debug stat | Add to inspector HTML in `GameCanvas.razor` |
+| New runtime tuning knob | Add mutable property to `GameState` (default from `GameConstants`); wire up a slider/toggle in the inspector (use ASCII labels — no emoji) |
 | Sound | New `IAudioProvider` abstraction in `Core/`, implement per platform |
 | MAUI / desktop port | Implement `IRenderer` + `IInputProvider` in a new project |
+
+## Keeping These Instructions Up to Date
+
+**This file must be updated in every PR that changes features, architecture, or developer workflow.**
+
+Specifically, whenever you:
+- Add or remove a game feature → update the relevant section and the Key Files table.
+- Change how spawning, collision, or any engine system works → update the Architecture section.
+- Add a new tuning knob or debug control → document it under Debug Inspector Panel.
+- Change the CI/deploy workflow → update the CI / Deployment section.
+- Add a new key file or rename one → update the Key Files table.
+
+Treat this file the way you treat `GameConstants.cs`: it is the authoritative reference, and leaving it stale is a bug.

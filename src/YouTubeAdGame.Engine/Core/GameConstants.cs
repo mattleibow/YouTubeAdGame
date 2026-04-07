@@ -16,15 +16,20 @@ public static class GameConstants
     public const float NearScale = 1.0f;
     public const float FarScale = 0.08f;
 
+    // Lanes
+    public const int LaneCount = 3;
+    /// <summary>Width of a single lane in world units (WorldHalfWidth * 2 / LaneCount).</summary>
+    public const float LaneWidth = WorldHalfWidth * 2f / LaneCount;
+
     // Player
-    public const float PlayerRadius = 28f;
+    public const float PlayerRadius = 18f;
     public const float PlayerSpeed = 350f;   // world-units / second
     public const float PlayerFireRate = 0.18f; // seconds between bullets
-    public const float BulletSpeed = 900f;
+    public const float BulletSpeed = 1400f;
 
     // Enemy
-    public const float EnemyRadius = 22f;
-    public const float EnemySpeed = 90f;    // depth-units / second
+    public const float EnemyRadius = 14f;
+    public const float EnemySpeed = 50f;    // depth-units / second
     public const float EnemyFireRate = 3.0f;
     public const float EnemyBulletSpeed = 300f;
 
@@ -34,16 +39,27 @@ public static class GameConstants
     public const float BossSpeed = 60f;
 
     // Crowd
-    public const float CrowdMemberRadius = 14f;
-    public const float CrowdSpacingX = 32f;
-    public const float CrowdSpacingDepth = 18f;
-    public const int CrowdColumns = 7;
-    public const int MaxCrowdVisible = 60;
+    public const float CrowdMemberRadius = 9f;
+    public const float CrowdSpacingX = 14f;
+    public const float CrowdSpacingDepth = 9f;
+    public const int CrowdColumns = 10;
+    public const int MaxCrowdVisible = 300;
+    /// <summary>Half the width of the full crowd formation (keeps crowd on road).</summary>
+    public const float CrowdHalfWidth = CrowdSpacingX * CrowdColumns / 2f;
+    /// <summary>Maximum soldiers that fire per salvo (inspector slider default).</summary>
+    public const int DefaultConcurrentShooters = 15;
+    /// <summary>Amplitude of the random per-soldier bobbing in world units.</summary>
+    public const float SoldierBobAmplitude = 4f;
 
     // Gate
-    public const float GateWidth = 100f;
-    public const float GateHeight = 60f;
+    public const float GateWidth = 190f;    // visual width — fills a full lane
+    public const float GateCollisionRadius = 80f;  // collision radius (< LaneWidth/2 − PlayerRadius to prevent cross-lane overlap)
+    public const float GateHeight = 25f;
     public const float GateDepth = 20f;     // world-depth size
+    public const float GateScrollSpeed = 150f;  // depth-units / second — much faster than zombies
+
+    /// <summary>Frequency of oscillating gate horizontal movement (radians per second).</summary>
+    public const float GateOscillateFrequency = 3f;
 
     // Game loop
     public const double TargetFps = 60.0;
@@ -51,7 +67,8 @@ public static class GameConstants
 
     // Spawn
     public const float SpawnDepth = MaxDepth - 20f;
-    public const float SpawnInterval = 1.2f;   // seconds between enemy waves
+    public const float SpawnInterval = 0.1f;   // default seconds between zombie spawn batches (wave pressure reduces this)
+    public const int ZombiesPerSpawn = 8;       // zombies added per batch
     public const float GateSpawnInterval = 4.0f;
-    public const int MaxEnemiesOnScreen = 80;  // cap on simultaneous enemies
+    public const int MaxEnemiesOnScreen = 500;  // cap on simultaneous zombies
 }

@@ -4,29 +4,111 @@
 @using YouTubeAdGame.Engine.Engine
 @using YouTubeAdGame.Engine.Rendering
 @using YouTubeAdGame.Web.Input
+@using YouTubeAdGame.Web.Services
 
 @implements IAsyncDisposable
 
-<div class="game-container"
-     tabindex="0"
-     @onkeydown="OnKeyDown"
-     @onkeyup="OnKeyUp"
-     @onkeydown:preventDefault="true"
-     @ontouchstart="OnTouchStart"
-     @ontouchmove="OnTouchMove"
-     @ontouchend="OnTouchEnd"
-     @ontouchstart:preventDefault="true"
-     @ontouchmove:preventDefault="true"
-     @onmousedown="OnMouseDown"
-     @onmousemove="OnMouseMove"
-     @onmouseup="OnMouseUp"
-     @ref="_containerRef">
+<div class="page-layout">
 
-    <SKCanvasView @ref="_canvasView"
-                  class="game-canvas"
-                  OnPaintSurface="OnPaintSurface"
-                  EnableRenderLoop="false"
-                  IgnorePixelScaling="false" />
+    <div class="game-container"
+         tabindex="0"
+         @onkeydown="OnKeyDown"
+         @onkeyup="OnKeyUp"
+         @onkeydown:preventDefault="true"
+         @ontouchstart="OnTouchStart"
+         @ontouchmove="OnTouchMove"
+         @ontouchend="OnTouchEnd"
+         @ontouchstart:preventDefault="true"
+         @ontouchmove:preventDefault="true"
+         @onmousedown="OnMouseDown"
+         @onmousemove="OnMouseMove"
+         @onmouseup="OnMouseUp"
+         @ref="_containerRef">
+
+        <SKCanvasView @ref="_canvasView"
+                      class="game-canvas"
+                      OnPaintSurface="OnPaintSurface"
+                      EnableRenderLoop="false"
+                      IgnorePixelScaling="false" />
+    </div>
+
+    <div class="inspector-panel">
+        <div class="inspector-title">Inspector</div>
+
+        <div class="inspector-section">
+            <div class="inspector-label">Phase</div>
+            <div class="inspector-value">@_state.Phase</div>
+        </div>
+        <div class="inspector-section">
+            <div class="inspector-label">Wave</div>
+            <div class="inspector-value">@_state.Wave</div>
+        </div>
+        <div class="inspector-section">
+            <div class="inspector-label">Score</div>
+            <div class="inspector-value">@_state.Score</div>
+        </div>
+        <div class="inspector-section">
+            <div class="inspector-label">Distance</div>
+            <div class="inspector-value">@((int)_state.Distance)</div>
+        </div>
+
+        <div class="inspector-divider"></div>
+
+        <div class="inspector-section">
+            <div class="inspector-label">Soldiers</div>
+            <div class="inspector-value">@_state.Crowd.Count</div>
+        </div>
+        <div class="inspector-section">
+            <div class="inspector-label">Zombies</div>
+            <div class="inspector-value">@_state.Enemies.Count</div>
+        </div>
+        <div class="inspector-section">
+            <div class="inspector-label">Bullets</div>
+            <div class="inspector-value">@_state.PlayerBullets.Count</div>
+        </div>
+        <div class="inspector-section">
+            <div class="inspector-label">Particles</div>
+            <div class="inspector-value">@_state.Particles.Count</div>
+        </div>
+
+        <div class="inspector-divider"></div>
+
+        <div class="inspector-label">Max zombies: @_state.MaxEnemiesOnScreen</div>
+        <input type="range"
+               class="inspector-slider"
+               min="1" max="1000"
+               value="@_state.MaxEnemiesOnScreen"
+               @oninput="OnMaxEnemiesChanged" />
+
+        <div class="inspector-label">Spawn delay: @((int)(_state.SpawnInterval * 1000)) ms</div>
+        <input type="range"
+               class="inspector-slider"
+               min="50" max="2000" step="10"
+               value="@((int)(_state.SpawnInterval * 1000))"
+               @oninput="OnSpawnIntervalChanged" />
+
+        <div class="inspector-label">Max shooters/salvo: @_state.MaxConcurrentShooters</div>
+        <input type="range"
+               class="inspector-slider"
+               min="1" max="50"
+               value="@_state.MaxConcurrentShooters"
+               @oninput="OnMaxShootersChanged" />
+
+        <div class="inspector-hint">Sliders change settings in real-time.</div>
+
+        <div class="inspector-divider"></div>
+
+        <div class="inspector-label">Game Mode</div>
+        <div class="mode-selector">
+            <button class="mode-arrow" @onclick="CycleModeBack">&lt;</button>
+            <span class="mode-name">@GetModeName()</span>
+            <button class="mode-arrow" @onclick="CycleModeForward">&gt;</button>
+        </div>
+
+        <a class="editor-link" href="editor">Edit Custom Map</a>
+
+    </div>
+
 </div>
 
 @code {
@@ -41,6 +123,15 @@
     // ── Game loop ─────────────────────────────────────────────────────────
     private PeriodicTimer?   _timer;
     private CancellationTokenSource _cts = new();
+    private int _frameCount;
+
+    [Inject] private IJSRuntime      JS         { get; set; } = default!;
+    [Inject] private CustomMapService MapStorage { get; set; } = default!;
+    [Inject] private NavigationManager Nav       { get; set; } = default!;
+
+    // All built-in modes plus Custom
+    private static readonly GameMode[] AllModes =
+        [..MapRegistry.GetAll().Select(x => x.Mode), GameMode.Custom];
 
     protected override void OnInitialized()
     {
@@ -52,6 +143,13 @@
     {
         if (!firstRender) return;
 
+        // Check for ?playCustom=1 query string (navigated from editor "Play Now")
+        if (Nav.Uri.Contains("playCustom=1", StringComparison.OrdinalIgnoreCase))
+        {
+            await SwitchToCustomModeAsync();
+            _engine?.StartGame(_state);
+        }
+
         // Start 60 Hz game loop
         _timer = new PeriodicTimer(TimeSpan.FromMilliseconds(1000.0 / 60.0));
         _ = RunGameLoopAsync(_cts.Token);
@@ -59,8 +157,6 @@
         // Give the container focus so keyboard events work
         await JS.InvokeVoidAsync("focusElement", _containerRef);
     }
-
-    [Inject] private IJSRuntime JS { get; set; } = default!;
 
     private async Task RunGameLoopAsync(CancellationToken ct)
     {
@@ -77,6 +173,11 @@
 
             _engine?.Update(_state, (float)GameConstants.FixedDeltaTime);
             _canvasView?.Invalidate();
+
+            // Refresh the inspector panel ~6× per second (every 10 frames)
+            _frameCount++;
+            if (_frameCount % 10 == 0)
+                await InvokeAsync(StateHasChanged);
         }
     }
 
@@ -140,9 +241,78 @@
             if (_state.Phase is GamePhase.Menu or GamePhase.GameOver or GamePhase.Victory)
                 _engine?.StartGame(_state);
         }
+        else if (_state.Phase == GamePhase.Menu)
+        {
+            if (e.Key is "ArrowLeft")  _ = CycleModeBackAsync();
+            if (e.Key is "ArrowRight") _ = CycleModeForwardAsync();
+        }
     }
 
     private void OnKeyUp(KeyboardEventArgs e) => _input.OnKeyUp(e.Key);
+
+    // ── Mode cycling ──────────────────────────────────────────────────────
+
+    private string GetModeName()
+    {
+        if (_state.Mode == GameMode.Custom)
+            return _state.ActiveMap is not null ? _state.ActiveMap.Name : "Custom";
+        return MapRegistry.Get(_state.Mode).Name;
+    }
+
+    private void CycleModeBack()    => _ = CycleModeBackAsync();
+    private void CycleModeForward() => _ = CycleModeForwardAsync();
+
+    private async Task CycleModeBackAsync()
+    {
+        int idx = Array.IndexOf(AllModes, _state.Mode);
+        _state.Mode = AllModes[(idx - 1 + AllModes.Length) % AllModes.Length];
+        await OnModeChangedAsync();
+    }
+
+    private async Task CycleModeForwardAsync()
+    {
+        int idx = Array.IndexOf(AllModes, _state.Mode);
+        _state.Mode = AllModes[(idx + 1) % AllModes.Length];
+        await OnModeChangedAsync();
+    }
+
+    private async Task OnModeChangedAsync()
+    {
+        if (_state.Mode == GameMode.Custom)
+            await SwitchToCustomModeAsync();
+        else
+            _state.ActiveMap = null;  // will be loaded fresh at StartGame
+        await InvokeAsync(StateHasChanged);
+    }
+
+    /// <summary>Load the stored active custom map into state.</summary>
+    private async Task SwitchToCustomModeAsync()
+    {
+        _state.Mode = GameMode.Custom;
+        var map = await MapStorage.LoadActiveMapAsync();
+        if (map is not null)
+            _state.ActiveMap = map;
+    }
+
+    // ── Inspector ─────────────────────────────────────────────────────────
+
+    private void OnMaxEnemiesChanged(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out int value))
+            _state.MaxEnemiesOnScreen = value;
+    }
+
+    private void OnSpawnIntervalChanged(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out int ms))
+            _state.SpawnInterval = ms / 1000f;
+    }
+
+    private void OnMaxShootersChanged(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out int value))
+            _state.MaxConcurrentShooters = System.Math.Max(1, value);
+    }
 
     // ── Lifecycle ─────────────────────────────────────────────────────────
 

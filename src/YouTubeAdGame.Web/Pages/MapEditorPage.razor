@@ -1,0 +1,555 @@
+@page "/editor"
+@using YouTubeAdGame.Engine.Objects
+@using YouTubeAdGame.Engine.Effects
+@inject CustomMapService MapStorage
+@inject NavigationManager Nav
+
+<div class="editor-page">
+
+    <!-- ── Header ─────────────────────────────────────────────── -->
+    <div class="editor-header">
+        <a class="editor-back" href="">&#8592; Back to Game</a>
+        <span class="editor-title">MAP EDITOR</span>
+        <span class="editor-status">@_status</span>
+    </div>
+
+    <!-- ── Tabs ───────────────────────────────────────────────── -->
+    <div class="editor-tabs">
+        @foreach (var tab in new[] { ("basic","Basic"), ("gates","Gates"), ("powerups","Power-Ups"), ("data","Import / Export") })
+        {
+            <button class="editor-tab @(_activeTab == tab.Item1 ? "active" : "")"
+                    @onclick="() => _activeTab = tab.Item1">@tab.Item2</button>
+        }
+    </div>
+
+    <!-- ── Tab content ────────────────────────────────────────── -->
+    <div class="editor-body">
+
+        <!-- ── BASIC ─────────────────────────────────────────── -->
+        @if (_activeTab == "basic")
+        {
+            <div class="editor-section">
+                <h3 class="editor-section-title">Identity</h3>
+                <label>Name
+                    <input class="editor-input" @bind="_f.Name" />
+                </label>
+                <label>Description
+                    <input class="editor-input" @bind="_f.Description" />
+                </label>
+            </div>
+
+            <div class="editor-section">
+                <h3 class="editor-section-title">Load Preset</h3>
+                <div class="editor-row">
+                    @foreach (var (mode, map) in MapRegistry.GetAll())
+                    {
+                        <button class="editor-preset-btn" @onclick="() => LoadFromDefinition(map)">
+                            @map.Name
+                        </button>
+                    }
+                </div>
+            </div>
+
+            <div class="editor-section">
+                <h3 class="editor-section-title">Road / Lanes</h3>
+                <label>Lane Count: <b>@_f.LaneCount</b>
+                    <input type="range" min="1" max="5" @bind="_f.LaneCount" />
+                </label>
+                <label>Lane Width: <b>@_f.LaneWidth</b>
+                    <input type="range" min="100" max="400" step="10" @bind="_f.LaneWidth" />
+                </label>
+            </div>
+
+            <div class="editor-section">
+                <h3 class="editor-section-title">Player</h3>
+                <label>Speed: <b>@_f.PlayerSpeed</b>
+                    <input type="range" min="100" max="1000" step="10" @bind="_f.PlayerSpeed" />
+                </label>
+                <label>Bullet Speed: <b>@_f.BulletSpeed</b>
+                    <input type="range" min="200" max="3000" step="50" @bind="_f.BulletSpeed" />
+                </label>
+                <label>Fire Rate (s): <b>@_f.FireRate.ToString("F2")</b>
+                    <input type="range" min="0.05" max="1.5" step="0.05" @bind="_f.FireRate" />
+                </label>
+            </div>
+
+            <div class="editor-section">
+                <h3 class="editor-section-title">Enemies</h3>
+                <label>Enemy Speed: <b>@_f.EnemySpeed</b>
+                    <input type="range" min="10" max="200" step="5" @bind="_f.EnemySpeed" />
+                </label>
+                <label>Max Enemies: <b>@_f.MaxEnemies</b>
+                    <input type="range" min="10" max="1000" step="10" @bind="_f.MaxEnemies" />
+                </label>
+                <label>Spawn Interval (s): <b>@_f.SpawnInterval.ToString("F3")</b>
+                    <input type="range" min="0.03" max="2.0" step="0.01" @bind="_f.SpawnInterval" />
+                </label>
+                <label>Zombies Per Spawn: <b>@_f.ZombiesPerSpawn</b>
+                    <input type="range" min="1" max="32" step="1" @bind="_f.ZombiesPerSpawn" />
+                </label>
+            </div>
+
+            <div class="editor-section">
+                <h3 class="editor-section-title">Gates</h3>
+                <label>Gate Scroll Speed: <b>@_f.GateScrollSpeed</b>
+                    <input type="range" min="30" max="400" step="10" @bind="_f.GateScrollSpeed" />
+                </label>
+                <label>Gate Spawn Interval (s): <b>@_f.GateSpawnInterval</b>
+                    <input type="range" min="1" max="30" step="0.5" @bind="_f.GateSpawnInterval" />
+                </label>
+            </div>
+
+            <div class="editor-section">
+                <h3 class="editor-section-title">Power-Ups</h3>
+                <label>Power-Up Spawn Interval (s, 0 = off): <b>@_f.PowerUpSpawnInterval</b>
+                    <input type="range" min="0" max="60" step="1" @bind="_f.PowerUpSpawnInterval" />
+                </label>
+            </div>
+        }
+
+        <!-- ── GATES ─────────────────────────────────────────── -->
+        @if (_activeTab == "gates")
+        {
+            <div class="editor-toolbar">
+                <button class="editor-add-btn" @onclick="AddGate">+ Add Gate</button>
+            </div>
+
+            @for (int i = 0; i < _gates.Count; i++)
+            {
+                var idx = i;
+                var g   = _gates[i];
+
+                <div class="editor-card">
+                    <div class="editor-card-header">
+                        <span>Gate @(i + 1)</span>
+                        <button class="editor-remove-btn" @onclick="() => _gates.RemoveAt(idx)">Remove</button>
+                    </div>
+
+                    <label>Operation
+                        <select @bind="g.Operation">
+                            @foreach (var op in Enum.GetValues<GateOperation>())
+                            {
+                                <option value="@op">@op</option>
+                            }
+                        </select>
+                    </label>
+
+                    <div class="editor-row">
+                        <label>Min Operand: <b>@g.OperandMin</b>
+                            <input type="range" min="0" max="50" @bind="g.OperandMin" />
+                        </label>
+                        <label>Max Operand: <b>@g.OperandMax</b>
+                            <input type="range" min="0" max="50" @bind="g.OperandMax" />
+                        </label>
+                    </div>
+
+                    <label>Movement
+                        <select @bind="g.MovementStyle">
+                            @foreach (var m in Enum.GetValues<GateMovement>())
+                            {
+                                <option value="@m">@m</option>
+                            }
+                        </select>
+                    </label>
+
+                    <label>On Shot
+                        <select @bind="g.OnShot">
+                            @foreach (var b in Enum.GetValues<GateHitBehavior>())
+                            {
+                                <option value="@b">@b</option>
+                            }
+                        </select>
+                    </label>
+
+                    <div class="editor-row">
+                        <label>Starts Open
+                            <input type="checkbox" @bind="g.IsOpen" />
+                        </label>
+                        <label>Left Lane Only
+                            <input type="checkbox" @bind="g.LeftLaneOnly" />
+                        </label>
+                    </div>
+
+                    <div class="editor-row">
+                        <label>Hits to Open: <b>@g.HitsToOpen</b>
+                            <input type="range" min="1" max="20" @bind="g.HitsToOpen" />
+                        </label>
+                        <label>Spawn Weight: <b>@g.SpawnWeight.ToString("F1")</b>
+                            <input type="range" min="0.1" max="5.0" step="0.1" @bind="g.SpawnWeight" />
+                        </label>
+                    </div>
+
+                    <div class="editor-row">
+                        <label>Min Wave (blank = any)
+                            <input type="number" class="editor-input editor-input-sm" min="1" max="20"
+                                   value="@(g.MinWave?.ToString() ?? "")"
+                                   @onchange="e => g.MinWave = TryParseNullable(e.Value?.ToString())" />
+                        </label>
+                        <label>Max Wave (blank = any)
+                            <input type="number" class="editor-input editor-input-sm" min="1" max="20"
+                                   value="@(g.MaxWave?.ToString() ?? "")"
+                                   @onchange="e => g.MaxWave = TryParseNullable(e.Value?.ToString())" />
+                        </label>
+                    </div>
+                </div>
+            }
+
+            @if (_gates.Count == 0)
+            {
+                <p class="editor-hint">No gates defined. Click '+ Add Gate' to create one.</p>
+            }
+        }
+
+        <!-- ── POWER-UPS ──────────────────────────────────────── -->
+        @if (_activeTab == "powerups")
+        {
+            <div class="editor-toolbar">
+                <button class="editor-add-btn" @onclick="AddPowerUp">+ Add Power-Up</button>
+            </div>
+
+            @for (int i = 0; i < _powerUps.Count; i++)
+            {
+                var idx = i;
+                var p   = _powerUps[i];
+
+                <div class="editor-card">
+                    <div class="editor-card-header">
+                        <span>Power-Up @(i + 1)</span>
+                        <button class="editor-remove-btn" @onclick="() => _powerUps.RemoveAt(idx)">Remove</button>
+                    </div>
+
+                    <label>Type
+                        <select @bind="p.Type">
+                            @foreach (var t in Enum.GetValues<PowerUpType>())
+                            {
+                                <option value="@t">@t</option>
+                            }
+                        </select>
+                    </label>
+
+                    <label>Duration (s, 0 = instant): <b>@p.Duration.ToString("F1")</b>
+                        <input type="range" min="0" max="30" step="0.5" @bind="p.Duration" />
+                    </label>
+                    <label>Spawn Weight: <b>@p.SpawnWeight.ToString("F1")</b>
+                        <input type="range" min="0.1" max="5.0" step="0.1" @bind="p.SpawnWeight" />
+                    </label>
+
+                    <div class="editor-row">
+                        <label>Wrapped in Concrete
+                            <input type="checkbox" @bind="p.IsBlocked" />
+                        </label>
+                        @if (p.IsBlocked)
+                        {
+                            <label>Block Health: <b>@p.BlockHealth</b>
+                                <input type="range" min="1" max="20" @bind="p.BlockHealth" />
+                            </label>
+                        }
+                    </div>
+
+                    <div class="editor-row">
+                        <label>Min Wave (blank = any)
+                            <input type="number" class="editor-input editor-input-sm" min="1" max="20"
+                                   value="@(p.MinWave?.ToString() ?? "")"
+                                   @onchange="e => p.MinWave = TryParseNullable(e.Value?.ToString())" />
+                        </label>
+                        <label>Max Wave (blank = any)
+                            <input type="number" class="editor-input editor-input-sm" min="1" max="20"
+                                   value="@(p.MaxWave?.ToString() ?? "")"
+                                   @onchange="e => p.MaxWave = TryParseNullable(e.Value?.ToString())" />
+                        </label>
+                    </div>
+                </div>
+            }
+
+            @if (_powerUps.Count == 0)
+            {
+                <p class="editor-hint">No power-ups defined. Click '+ Add Power-Up' to create one.</p>
+            }
+        }
+
+        <!-- ── IMPORT / EXPORT ────────────────────────────────── -->
+        @if (_activeTab == "data")
+        {
+            <div class="editor-section">
+                <h3 class="editor-section-title">Export</h3>
+                <p class="editor-hint">Download the current editor state as a JSON file.</p>
+                <button class="editor-btn" @onclick="ExportJson">Download JSON</button>
+            </div>
+
+            <div class="editor-section">
+                <h3 class="editor-section-title">Import JSON</h3>
+                <p class="editor-hint">Paste a previously exported map JSON below, then click Import.</p>
+                <textarea class="editor-textarea" rows="10" @bind="_importJson" placeholder='{ "Name": "My Mode", ... }'></textarea>
+                <button class="editor-btn" @onclick="ImportJson">Import</button>
+            </div>
+
+            <div class="editor-section">
+                <h3 class="editor-section-title">Saved Maps</h3>
+                @if (_savedNames.Count == 0)
+                {
+                    <p class="editor-hint">No maps saved yet.</p>
+                }
+                @foreach (var name in _savedNames)
+                {
+                    var n = name;
+                    <div class="editor-saved-row">
+                        <span class="editor-saved-name">@n</span>
+                        <button class="editor-btn-sm" @onclick="() => LoadSaved(n)">Load</button>
+                        <button class="editor-btn-sm" @onclick="() => SetActiveFromSaved(n)">Set Active</button>
+                        <button class="editor-btn-sm editor-btn-danger" @onclick="() => DeleteSaved(n)">Delete</button>
+                    </div>
+                }
+            </div>
+        }
+
+    </div>
+
+    <!-- ── Footer actions ─────────────────────────────────────── -->
+    <div class="editor-footer">
+        <label class="editor-save-name-label">
+            Save as:
+            <input class="editor-input editor-input-sm" @bind="_saveName" placeholder="map name" />
+        </label>
+        <button class="editor-btn" @onclick="SaveToStorage">Save</button>
+        <button class="editor-btn editor-btn-primary" @onclick="SetAsActive">Set as Active Custom Map</button>
+        <button class="editor-btn editor-btn-primary" @onclick="PlayNow">Play Now (Custom Mode)</button>
+    </div>
+
+</div>
+
+@code {
+
+    // ── State ────────────────────────────────────────────────────────────────
+
+    private string _activeTab = "basic";
+    private string _status    = "";
+    private string _saveName  = "";
+    private string _importJson = "";
+    private List<string> _savedNames = [];
+
+    // Mutable editor form
+    private MapForm _f = new();
+    private List<GateForm>    _gates    = [];
+    private List<PowerUpForm> _powerUps = [];
+
+    // ── Lifecycle ────────────────────────────────────────────────────────────
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Load preset names from storage
+        _savedNames = await MapStorage.ListNamesAsync();
+
+        // Start with the HordeRunner preset
+        LoadFromDefinition(MapRegistry.HordeRunner);
+    }
+
+    // ── Preset / load helpers ────────────────────────────────────────────────
+
+    private void LoadFromDefinition(MapDefinition def)
+    {
+        _f = new MapForm
+        {
+            Name                 = def.Name,
+            Description          = def.Description,
+            LaneCount            = def.LaneCount,
+            LaneWidth            = (int)def.LaneWidth,
+            PlayerSpeed          = (int)def.PlayerSpeed,
+            BulletSpeed          = (int)def.BulletSpeed,
+            FireRate             = def.FireRate,
+            EnemySpeed           = (int)def.EnemySpeed,
+            MaxEnemies           = def.MaxEnemies,
+            SpawnInterval        = def.SpawnInterval,
+            ZombiesPerSpawn      = def.ZombiesPerSpawn,
+            GateScrollSpeed      = (int)def.GateScrollSpeed,
+            GateSpawnInterval    = def.GateSpawnInterval,
+            PowerUpSpawnInterval = def.PowerUpSpawnInterval,
+        };
+
+        _gates = def.GatePalette.Select(g => new GateForm
+        {
+            Operation    = g.Operation,
+            OperandMin   = g.OperandRange.Min,
+            OperandMax   = g.OperandRange.Max,
+            MovementStyle= g.MovementStyle,
+            IsOpen       = g.IsOpen,
+            OnShot       = g.OnShot,
+            HitsToOpen   = g.HitsToOpen,
+            SpawnWeight  = g.SpawnWeight,
+            MinWave      = g.MinWave,
+            MaxWave      = g.MaxWave,
+            LeftLaneOnly = g.LeftLaneOnly,
+        }).ToList();
+
+        _powerUps = def.PowerUpPalette.Select(p => new PowerUpForm
+        {
+            Type        = p.Type,
+            Duration    = p.Duration,
+            IsBlocked   = p.IsBlocked,
+            BlockHealth = p.BlockHealth,
+            SpawnWeight = p.SpawnWeight,
+            MinWave     = p.MinWave,
+            MaxWave     = p.MaxWave,
+        }).ToList();
+
+        _saveName = def.Name;
+        _status   = $"Loaded '{def.Name}'";
+    }
+
+    private MapDefinition BuildDefinition() => new()
+    {
+        Name                 = _f.Name,
+        Description          = _f.Description,
+        LaneCount            = _f.LaneCount,
+        LaneWidth            = _f.LaneWidth,
+        PlayerSpeed          = _f.PlayerSpeed,
+        BulletSpeed          = _f.BulletSpeed,
+        FireRate             = _f.FireRate,
+        EnemySpeed           = _f.EnemySpeed,
+        MaxEnemies           = _f.MaxEnemies,
+        SpawnInterval        = _f.SpawnInterval,
+        ZombiesPerSpawn      = _f.ZombiesPerSpawn,
+        GateScrollSpeed      = _f.GateScrollSpeed,
+        GateSpawnInterval    = _f.GateSpawnInterval,
+        PowerUpSpawnInterval = _f.PowerUpSpawnInterval,
+        GatePalette          = _gates.Select(g => new GateDefinition
+        {
+            Operation    = g.Operation,
+            OperandRange = new OperandRange(g.OperandMin, g.OperandMax),
+            MovementStyle= g.MovementStyle,
+            IsOpen       = g.IsOpen,
+            OnShot       = g.OnShot,
+            HitsToOpen   = g.HitsToOpen,
+            SpawnWeight  = g.SpawnWeight,
+            MinWave      = g.MinWave,
+            MaxWave      = g.MaxWave,
+            LeftLaneOnly = g.LeftLaneOnly,
+        }).ToList(),
+        PowerUpPalette = _powerUps.Select(p => new PowerUpDefinition
+        {
+            Type        = p.Type,
+            Duration    = p.Duration,
+            IsBlocked   = p.IsBlocked,
+            BlockHealth = p.BlockHealth,
+            OnShot      = p.IsBlocked ? BlockHitBehavior.BreakConcrete : BlockHitBehavior.Nothing,
+            SpawnWeight = p.SpawnWeight,
+            MinWave     = p.MinWave,
+            MaxWave     = p.MaxWave,
+        }).ToList(),
+        Waves = [],
+    };
+
+    // ── Actions ──────────────────────────────────────────────────────────────
+
+    private void AddGate() => _gates.Add(new GateForm());
+    private void AddPowerUp() => _powerUps.Add(new PowerUpForm());
+
+    private async Task SaveToStorage()
+    {
+        string name = string.IsNullOrWhiteSpace(_saveName) ? _f.Name : _saveName;
+        if (string.IsNullOrWhiteSpace(name)) { _status = "Enter a name first."; return; }
+
+        await MapStorage.SaveAsync(name, BuildDefinition());
+        _savedNames = await MapStorage.ListNamesAsync();
+        _status = $"Saved '{name}'.";
+    }
+
+    private async Task SetAsActive()
+    {
+        await MapStorage.SaveActiveMapAsync(BuildDefinition());
+        _status = $"'{_f.Name}' is now the active Custom map.";
+    }
+
+    private async Task PlayNow()
+    {
+        await MapStorage.SaveActiveMapAsync(BuildDefinition());
+        Nav.NavigateTo("?playCustom=1");
+    }
+
+    private async Task ExportJson()
+    {
+        await MapStorage.ExportJsonAsync(BuildDefinition());
+        _status = "JSON downloaded.";
+    }
+
+    private void ImportJson()
+    {
+        var def = MapSerializer.Deserialize(_importJson);
+        if (def is null) { _status = "Invalid JSON — could not parse map."; return; }
+        LoadFromDefinition(def);
+        _importJson = "";
+        _status = "Imported from JSON.";
+    }
+
+    private async Task LoadSaved(string name)
+    {
+        var def = await MapStorage.LoadAsync(name);
+        if (def is null) { _status = $"Could not load '{name}'."; return; }
+        LoadFromDefinition(def);
+    }
+
+    private async Task SetActiveFromSaved(string name)
+    {
+        var def = await MapStorage.LoadAsync(name);
+        if (def is null) { _status = $"Could not load '{name}'."; return; }
+        await MapStorage.SaveActiveMapAsync(def);
+        _status = $"'{name}' is now the active Custom map.";
+    }
+
+    private async Task DeleteSaved(string name)
+    {
+        await MapStorage.DeleteAsync(name);
+        _savedNames = await MapStorage.ListNamesAsync();
+        _status = $"Deleted '{name}'.";
+    }
+
+    // ── Helpers ──────────────────────────────────────────────────────────────
+
+    private static int? TryParseNullable(string? s) =>
+        int.TryParse(s, out int v) ? v : null;
+
+    // ── Form models ──────────────────────────────────────────────────────────
+
+    private sealed class MapForm
+    {
+        public string Name                 { get; set; } = "My Custom Mode";
+        public string Description          { get; set; } = "Custom game mode";
+        public int    LaneCount            { get; set; } = 3;
+        public int    LaneWidth            { get; set; } = 200;
+        public int    PlayerSpeed          { get; set; } = 400;
+        public int    BulletSpeed          { get; set; } = 1400;
+        public float  FireRate             { get; set; } = 0.25f;
+        public int    EnemySpeed           { get; set; } = 50;
+        public int    MaxEnemies           { get; set; } = 500;
+        public float  SpawnInterval        { get; set; } = 0.10f;
+        public int    ZombiesPerSpawn      { get; set; } = 8;
+        public int    GateScrollSpeed      { get; set; } = 150;
+        public float  GateSpawnInterval    { get; set; } = 5f;
+        public float  PowerUpSpawnInterval { get; set; } = 12f;
+    }
+
+    private sealed class GateForm
+    {
+        public GateOperation   Operation    { get; set; } = GateOperation.Add;
+        public int             OperandMin   { get; set; } = 1;
+        public int             OperandMax   { get; set; } = 3;
+        public GateMovement    MovementStyle{ get; set; } = GateMovement.FastScroll;
+        public bool            IsOpen       { get; set; } = true;
+        public GateHitBehavior OnShot       { get; set; } = GateHitBehavior.Nothing;
+        public int             HitsToOpen   { get; set; } = 1;
+        public float           SpawnWeight  { get; set; } = 1f;
+        public int?            MinWave      { get; set; }
+        public int?            MaxWave      { get; set; }
+        public bool            LeftLaneOnly { get; set; }
+    }
+
+    private sealed class PowerUpForm
+    {
+        public PowerUpType Type        { get; set; } = PowerUpType.SpeedBoost;
+        public float       Duration    { get; set; } = 5f;
+        public bool        IsBlocked   { get; set; }
+        public int         BlockHealth { get; set; } = 3;
+        public float       SpawnWeight { get; set; } = 1f;
+        public int?        MinWave     { get; set; }
+        public int?        MaxWave     { get; set; }
+    }
+}

@@ -1,3 +1,5 @@
+using SkiaSharp;
+
 namespace YouTubeAdGame.Engine.Objects;
 
 /// <summary>
@@ -13,6 +15,24 @@ public abstract class GameObjectBase
     /// 0 = at the player's feet; <see cref="Core.GameConstants.MaxDepth"/> = horizon.
     /// </summary>
     public float Depth { get; set; }
+
+    /// <summary>
+    /// Height above the road surface in world units.
+    /// 0 = on the ground; positive values float the object above the road.
+    /// Used for animated bobbing (e.g. power-ups) and perspective-correct height rendering.
+    /// </summary>
+    public float WorldHeight { get; set; }
+
+    /// <summary>
+    /// 3-D world position as an <see cref="SKPoint3"/>.
+    /// Maps to: X = <see cref="WorldX"/>, Y = <see cref="WorldHeight"/>, Z = <see cref="Depth"/>.
+    /// Provides a convenient way to pass positions to <see cref="Math.Camera.Project(SKPoint3)"/>.
+    /// </summary>
+    public SKPoint3 WorldPos
+    {
+        get => new(WorldX, WorldHeight, Depth);
+        set { WorldX = value.X; WorldHeight = value.Y; Depth = value.Z; }
+    }
 
     /// <summary>Logical radius for circle-based collision checks.</summary>
     public float Radius { get; set; }
