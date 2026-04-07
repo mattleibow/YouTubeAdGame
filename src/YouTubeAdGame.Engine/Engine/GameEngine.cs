@@ -36,7 +36,7 @@ public sealed class GameEngine(IInputProvider input)
         state.FloatingTexts.Clear();
         state.Particles.Clear();
         state.EnemySpawnTimer = 0;
-        state.GateSpawnTimer  = GameConstants.GateSpawnInterval * 0.5f;
+        state.GateSpawnTimer  = 0.5f;  // first gate row arrives quickly
         state.PlayerFireTimer = 0;
 
         _spawn.SpawnInitialHorde(state);
@@ -146,10 +146,10 @@ public sealed class GameEngine(IInputProvider input)
             }
         }
 
-        // Gates scroll with the world
+        // Gates scroll much faster than the world — rush toward the player
         foreach (var g in state.Gates)
         {
-            g.Depth -= GameConstants.EnemySpeed * 0.6f * dt;
+            g.Depth -= GameConstants.GateScrollSpeed * dt;
             if (g.Depth < -GameConstants.GateDepth) g.IsDestroyed = true;
         }
 

@@ -20,6 +20,16 @@ The player commands a **crowd of soldiers** marching down the road toward an end
 - **Zombies** (enemies): shuffle toward the player at a constant base speed. They **never fire**. When a zombie reaches the player they consume one soldier and die.
 - Gates on the road offer math operations (`+1`, `+2`, `×2` in early waves; larger in later waves) to gain/lose soldiers, or gun upgrades. Gate rewards scale with the current wave.
 
+### Game Modes
+
+The main menu shows the available game mode(s). Each mode tweaks core gameplay constants (lane count, gate speed, bullet speed, etc.). The `GameMode` enum in `Core/GameMode.cs` defines the modes; `GameState.Mode` tracks the selected mode.
+
+| Mode | Lanes | Gate speed | Bullet speed | Notes |
+|------|-------|-----------|-------------|-------|
+| **Horde Runner** | 3 | 150 depth/s (3× zombie speed) | 1400 | Default. Vast zombie hordes, fast gates to build army |
+
+More modes can be added by extending the `GameMode` enum and branching on `state.Mode` in the engine/renderer.
+
 ## Repository Structure
 
 ```
@@ -64,6 +74,20 @@ Objects carry a **depth** value (0 = at the player, 1000 = horizon). `Camera.cs`
 - `screenY` = lerp(playerY, horizonY, t)  where `t = depth / MaxDepth`
 - `scale`   = lerp(NearScale, FarScale, t)
 - `screenX` = centreX + worldX × (screenHalfWidth / worldHalfWidth)
+
+### 3-Lane Road & Gate System
+
+The road is divided into **3 equal lanes** (`LaneCount = 3`, each `LaneWidth = 200` world-units):
+
+| Lane | Center worldX | Range |
+|------|--------------|-------|
+| Left | −200 | −300 to −100 |
+| Center | 0 | −100 to +100 |
+| Right | +200 | +100 to +300 |
+
+Gates spawn as a **full row** of 3 (one per lane), each `GateWidth = 190` wide (filling the lane). The player chooses which lane to be in to pick a gate. Gates scroll toward the player at `GateScrollSpeed = 150` depth/sec — **3× faster** than zombies (`EnemySpeed = 50`). This creates urgency: gates rush past the zombie horde and reach the player quickly.
+
+Gate collision uses `GateCollisionRadius = 80` (circle-based) which prevents cross-lane triggering while covering most of the lane width.
 
 ### Zombie Spawning — Sea-of-Zombies Model
 
@@ -150,6 +174,7 @@ This means you can preview any PR branch on GitHub Pages simply by adding the `d
 |------|---------|
 | `Core/GameConstants.cs` | All tuning constants (default values) |
 | `Core/GameState.cs` | All mutable runtime state, including runtime-adjustable tuning properties |
+| `Core/GameMode.cs` | Game mode enum — defines available gameplay modes |
 | `Core/IInputProvider.cs` | Input abstraction + `InputState` |
 | `Core/IRenderer.cs` | Rendering abstraction |
 | `Math/Camera.cs` | Pseudo-3D projection math |
@@ -175,6 +200,7 @@ dotnet run --project src/YouTubeAdGame.Web
 | Feature | Where to add |
 |---------|-------------|
 | New weapon | `Engine/GameEngine.cs` + `Rendering/SkiaGameRenderer.cs` |
+| New game mode | Add variant to `Core/GameMode.cs`; branch on `state.Mode` in engine/spawn/renderer |
 | New enemy behaviour | `Objects/Enemy.cs` + `Engine/SpawnSystem.cs` |
 | New gate operation | `Objects/Gate.cs` `GateOperation` enum |
 | New visual effect | `Effects/` + `Rendering/SkiaGameRenderer.cs` |

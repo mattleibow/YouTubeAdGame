@@ -19,6 +19,10 @@ public sealed class GameState
     // ── Phase ───────────────────────────────────────────────────────────────
     public GamePhase Phase { get; set; } = GamePhase.Menu;
 
+    // ── Mode ────────────────────────────────────────────────────────────────
+    /// <summary>The game mode selected from the menu.</summary>
+    public GameMode Mode { get; set; } = GameMode.HordeRunner;
+
     // ── Score / progression ─────────────────────────────────────────────────
     public int Score { get; set; }
     public int Wave { get; set; }

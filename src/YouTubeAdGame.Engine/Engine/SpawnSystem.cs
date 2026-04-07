@@ -27,7 +27,7 @@ internal sealed class SpawnSystem
         state.GateSpawnTimer -= dt;
         if (state.GateSpawnTimer <= 0f)
         {
-            SpawnGatePair(state);
+            SpawnGateRow(state);
             state.GateSpawnTimer = GameConstants.GateSpawnInterval;
         }
 
@@ -65,34 +65,29 @@ internal sealed class SpawnSystem
         }
     }
 
-    private static void SpawnGatePair(GameState state)
+    private static void SpawnGateRow(GameState state)
     {
-        // Always spawn two gates — one on each side of the road
+        // Spawn one gate per lane across the full road width
         float depth = GameConstants.SpawnDepth - 30f;
-        float laneOffset = GameConstants.WorldHalfWidth * 0.45f;
 
-        var leftOp  = ChooseOperation(state, leftLane: true);
-        var rightOp = ChooseOperation(state, leftLane: false);
-
-        state.Gates.Add(new Gate
+        for (int lane = 0; lane < GameConstants.LaneCount; lane++)
         {
-            WorldX      = -laneOffset,
-            Depth       = depth,
-            Operation   = leftOp.op,
-            Operand     = leftOp.operand,
-            IsLeftLane  = true,
-            Radius      = GameConstants.GateWidth * 0.5f
-        });
+            float laneCenter = -GameConstants.WorldHalfWidth
+                + GameConstants.LaneWidth * 0.5f
+                + lane * GameConstants.LaneWidth;
 
-        state.Gates.Add(new Gate
-        {
-            WorldX      = laneOffset,
-            Depth       = depth,
-            Operation   = rightOp.op,
-            Operand     = rightOp.operand,
-            IsLeftLane  = false,
-            Radius      = GameConstants.GateWidth * 0.5f
-        });
+            bool isLeftLane = lane == 0;
+            var (op, operand) = ChooseOperation(state, leftLane: isLeftLane);
+
+            state.Gates.Add(new Gate
+            {
+                WorldX    = laneCenter,
+                Depth     = depth,
+                Operation = op,
+                Operand   = operand,
+                IsLeftLane = isLeftLane
+            });
+        }
     }
 
     private static (GateOperation op, int operand) ChooseOperation(GameState state, bool leftLane)

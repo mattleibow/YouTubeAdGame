@@ -23,7 +23,7 @@ public sealed class Gate : GameObjectBase
 
     public Gate()
     {
-        Radius = Core.GameConstants.GateWidth * 0.5f;
+        Radius = Core.GameConstants.GateCollisionRadius;
     }
 
     /// <summary>Human-readable label shown on the gate, e.g. "+20" or "×3".</summary>

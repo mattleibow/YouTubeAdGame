@@ -152,21 +152,26 @@ public sealed class SkiaGameRenderer : IRenderer
 
     private void DrawLaneMarkings(SKCanvas canvas, Camera camera)
     {
-        // Draw dashes along the centre at several depth intervals
+        // Draw dashed lane dividers between the 3 lanes
         _strokePaint.Color       = ColLane;
         _strokePaint.StrokeWidth = 3f;
         _strokePaint.PathEffect  = SKPathEffect.CreateDash([20f, 20f], 0f);
 
-        const int steps = 12;
-        for (int i = 0; i < steps; i++)
+        for (int divider = 1; divider < GameConstants.LaneCount; divider++)
         {
-            float d0 = GameConstants.MaxDepth * i / steps;
-            float d1 = GameConstants.MaxDepth * (i + 1) / steps;
+            float worldX = -GameConstants.WorldHalfWidth + divider * GameConstants.LaneWidth;
 
-            var (x0, y0, _) = camera.Project(0f, d0);
-            var (x1, y1, _) = camera.Project(0f, d1);
+            const int steps = 12;
+            for (int i = 0; i < steps; i++)
+            {
+                float d0 = GameConstants.MaxDepth * i / steps;
+                float d1 = GameConstants.MaxDepth * (i + 1) / steps;
 
-            canvas.DrawLine(x0, y0, x1, y1, _strokePaint);
+                var (x0, y0, _) = camera.Project(worldX, d0);
+                var (x1, y1, _) = camera.Project(worldX, d1);
+
+                canvas.DrawLine(x0, y0, x1, y1, _strokePaint);
+            }
         }
 
         _strokePaint.PathEffect = null;
@@ -384,10 +389,38 @@ public sealed class SkiaGameRenderer : IRenderer
     private void DrawMenuOverlay(SKCanvas canvas, GameState state)
     {
         DrawDimOverlay(canvas, 0.6f);
-        DrawCenteredText(canvas, "CROWD RUNNER", Width * 0.5f, Height * 0.38f, ColPlayer, 40f, bold: true);
-        DrawCenteredText(canvas, "Tap to Start",  Width * 0.5f, Height * 0.52f, SKColors.White, 22f);
+        DrawCenteredText(canvas, "CROWD RUNNER", Width * 0.5f, Height * 0.30f, ColPlayer, 40f, bold: true);
+
+        // Mode display
+        string modeName = state.Mode switch
+        {
+            GameMode.HordeRunner => "HORDE RUNNER",
+            _ => "UNKNOWN"
+        };
+        string modeDesc = state.Mode switch
+        {
+            GameMode.HordeRunner => "3 lanes / fast gates / vast hordes",
+            _ => ""
+        };
+
+        // Mode "button"
+        float btnY = Height * 0.46f;
+        float btnW = Width * 0.6f;
+        float btnH = 52f;
+
+        _fillPaint.Color = ColPlayer.WithAlpha(30);
+        canvas.DrawRoundRect(Width * 0.5f - btnW * 0.5f, btnY - btnH * 0.5f, btnW, btnH, 10f, 10f, _fillPaint);
+
+        _strokePaint.Color       = ColPlayer.WithAlpha(120);
+        _strokePaint.StrokeWidth = 2f;
+        canvas.DrawRoundRect(Width * 0.5f - btnW * 0.5f, btnY - btnH * 0.5f, btnW, btnH, 10f, 10f, _strokePaint);
+
+        DrawCenteredText(canvas, modeName, Width * 0.5f, btnY + 6f, ColPlayer, 22f, bold: true);
+        DrawCenteredText(canvas, modeDesc, Width * 0.5f, Height * 0.55f, SKColors.White.WithAlpha(160), 13f);
+
+        DrawCenteredText(canvas, "Tap to Start",  Width * 0.5f, Height * 0.64f, SKColors.White, 22f);
         DrawCenteredText(canvas, "Move left/right with mouse, touch or A/D keys",
-                         Width * 0.5f, Height * 0.62f, SKColors.White.WithAlpha(160), 13f);
+                         Width * 0.5f, Height * 0.72f, SKColors.White.WithAlpha(160), 13f);
     }
 
     private void DrawGameOverOverlay(SKCanvas canvas, GameState state)

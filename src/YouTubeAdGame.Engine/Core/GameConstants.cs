@@ -16,11 +16,16 @@ public static class GameConstants
     public const float NearScale = 1.0f;
     public const float FarScale = 0.08f;
 
+    // Lanes
+    public const int LaneCount = 3;
+    /// <summary>Width of a single lane in world units (WorldHalfWidth * 2 / LaneCount).</summary>
+    public const float LaneWidth = WorldHalfWidth * 2f / LaneCount;
+
     // Player
     public const float PlayerRadius = 18f;
     public const float PlayerSpeed = 350f;   // world-units / second
     public const float PlayerFireRate = 0.18f; // seconds between bullets
-    public const float BulletSpeed = 900f;
+    public const float BulletSpeed = 1400f;
 
     // Enemy
     public const float EnemyRadius = 14f;
@@ -43,9 +48,11 @@ public static class GameConstants
     public const float CrowdHalfWidth = CrowdSpacingX * CrowdColumns / 2f;
 
     // Gate
-    public const float GateWidth = 100f;
+    public const float GateWidth = 190f;    // visual width — fills a full lane
+    public const float GateCollisionRadius = 80f;  // collision radius (< LaneWidth/2 − PlayerRadius to prevent cross-lane overlap)
     public const float GateHeight = 60f;
     public const float GateDepth = 20f;     // world-depth size
+    public const float GateScrollSpeed = 150f;  // depth-units / second — much faster than zombies
 
     // Game loop
     public const double TargetFps = 60.0;
