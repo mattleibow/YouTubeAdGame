@@ -67,8 +67,25 @@ internal sealed class SpawnSystem
         int capacity = state.MaxEnemiesOnScreen - state.Enemies.Count;
         if (capacity <= 0) return;
 
-        int toSpawn = System.Math.Min(GameConstants.ZombiesPerSpawn, capacity);
+        int toSpawn = System.Math.Min(
+            state.ActiveMap?.ZombiesPerSpawn ?? GameConstants.ZombiesPerSpawn,
+            capacity);
         float spread = GameConstants.WorldHalfWidth - GameConstants.EnemyRadius;
+        float baseSpeed = state.ActiveMap?.EnemySpeed ?? GameConstants.EnemySpeed;
+
+        // Apply wave definition speed multiplier if present
+        float speedMultiplier = 1f;
+        if (state.ActiveMap is { Waves.Count: > 0 } map2)
+        {
+            foreach (var wd in map2.Waves)
+            {
+                if (wd.WaveNumber == state.Wave)
+                {
+                    speedMultiplier = wd.EnemySpeedMultiplier;
+                    break;
+                }
+            }
+        }
 
         for (int i = 0; i < toSpawn; i++)
         {
@@ -78,7 +95,7 @@ internal sealed class SpawnSystem
             {
                 WorldX = x,
                 Depth  = GameConstants.SpawnDepth - depthJitter,
-                Speed  = GameConstants.EnemySpeed + (float)(Rng.NextDouble() * 10.0 - 5.0)
+                Speed  = baseSpeed * speedMultiplier + (float)(Rng.NextDouble() * 10.0 - 5.0)
             });
         }
     }

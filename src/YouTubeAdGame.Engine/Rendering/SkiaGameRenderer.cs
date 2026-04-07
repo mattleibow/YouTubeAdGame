@@ -498,12 +498,14 @@ public sealed class SkiaGameRenderer : IRenderer
         DrawDimOverlay(canvas, 0.6f);
         DrawCenteredText(canvas, "CROWD RUNNER", Width * 0.5f, Height * 0.30f, ColPlayer, 40f, bold: true);
 
-        // Read mode name/description from MapRegistry
-        var mapDef = MapRegistry.Get(state.Mode);
+        // Read mode name/description — for Custom use ActiveMap if loaded, else fallback
+        MapDefinition mapDef = (state.Mode == GameMode.Custom && state.ActiveMap is not null)
+            ? state.ActiveMap
+            : MapRegistry.Get(state.Mode);
         string modeName = mapDef.Name.ToUpperInvariant();
         string modeDesc = mapDef.Description;
 
-        // Mode "button"
+        // Mode selector "button" with < > arrows to signal cycling
         float btnY = Height * 0.46f;
         float btnW = Width * 0.6f;
         float btnH = 52f;
@@ -515,12 +517,16 @@ public sealed class SkiaGameRenderer : IRenderer
         _strokePaint.StrokeWidth = 2f;
         canvas.DrawRoundRect(Width * 0.5f - btnW * 0.5f, btnY - btnH * 0.5f, btnW, btnH, 10f, 10f, _strokePaint);
 
+        // Arrow hints
+        float arrowX = Width * 0.5f - btnW * 0.5f + 18f;
+        DrawCenteredText(canvas, "<", arrowX, btnY + 6f, ColPlayer.WithAlpha(180), 22f, bold: true);
+        DrawCenteredText(canvas, ">", Width * 0.5f + btnW * 0.5f - 18f, btnY + 6f, ColPlayer.WithAlpha(180), 22f, bold: true);
         DrawCenteredText(canvas, modeName, Width * 0.5f, btnY + 6f, ColPlayer, 22f, bold: true);
         DrawCenteredText(canvas, modeDesc, Width * 0.5f, Height * 0.55f, SKColors.White.WithAlpha(160), 13f);
 
         DrawCenteredText(canvas, "Tap to Start",  Width * 0.5f, Height * 0.64f, SKColors.White, 22f);
-        DrawCenteredText(canvas, "Move left/right with mouse, touch or A/D keys",
-                         Width * 0.5f, Height * 0.72f, SKColors.White.WithAlpha(160), 13f);
+        DrawCenteredText(canvas, "Use inspector arrows to change mode",
+                         Width * 0.5f, Height * 0.72f, SKColors.White.WithAlpha(140), 13f);
     }
 
     private void DrawGameOverOverlay(SKCanvas canvas, GameState state)

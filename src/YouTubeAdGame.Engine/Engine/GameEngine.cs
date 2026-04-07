@@ -43,8 +43,15 @@ public sealed class GameEngine(IInputProvider input)
         state.PlayerFireTimer = 0;
         state.PowerUpSpawnTimer = 3f;   // first power-up after a short delay
 
-        // Load the map definition for the selected mode
-        state.ActiveMap = MapRegistry.Get(state.Mode);
+        // Load the map definition for the selected mode.
+        // For Custom mode, preserve the caller-supplied ActiveMap (if any).
+        if (state.Mode != GameMode.Custom || state.ActiveMap is null)
+            state.ActiveMap = MapRegistry.Get(state.Mode);
+
+        // Initialise runtime-adjustable state from the map definition.
+        var map = state.ActiveMap;
+        state.MaxEnemiesOnScreen = map.MaxEnemies;
+        state.SpawnInterval      = map.SpawnInterval;
 
         _spawn.SpawnInitialHorde(state);
     }

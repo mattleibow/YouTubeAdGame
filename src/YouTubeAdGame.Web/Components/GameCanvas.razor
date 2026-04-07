@@ -4,6 +4,7 @@
 @using YouTubeAdGame.Engine.Engine
 @using YouTubeAdGame.Engine.Rendering
 @using YouTubeAdGame.Web.Input
+@using YouTubeAdGame.Web.Services
 
 @implements IAsyncDisposable
 
@@ -87,6 +88,18 @@
                @oninput="OnSpawnIntervalChanged" />
 
         <div class="inspector-hint">Sliders change settings in real-time.</div>
+
+        <div class="inspector-divider"></div>
+
+        <div class="inspector-label">Game Mode</div>
+        <div class="mode-selector">
+            <button class="mode-arrow" @onclick="CycleModeBack">&lt;</button>
+            <span class="mode-name">@GetModeName()</span>
+            <button class="mode-arrow" @onclick="CycleModeForward">&gt;</button>
+        </div>
+
+        <a class="editor-link" href="/editor">Edit Custom Map</a>
+
     </div>
 
 </div>
@@ -105,6 +118,14 @@
     private CancellationTokenSource _cts = new();
     private int _frameCount;
 
+    [Inject] private IJSRuntime      JS         { get; set; } = default!;
+    [Inject] private CustomMapService MapStorage { get; set; } = default!;
+    [Inject] private NavigationManager Nav       { get; set; } = default!;
+
+    // All built-in modes plus Custom
+    private static readonly GameMode[] AllModes =
+        [..MapRegistry.GetAll().Select(x => x.Mode), GameMode.Custom];
+
     protected override void OnInitialized()
     {
         _renderer = new SkiaGameRenderer();
@@ -115,6 +136,13 @@
     {
         if (!firstRender) return;
 
+        // Check for ?playCustom=1 query string (navigated from editor "Play Now")
+        if (Nav.Uri.Contains("playCustom=1", StringComparison.OrdinalIgnoreCase))
+        {
+            await SwitchToCustomModeAsync();
+            _engine?.StartGame(_state);
+        }
+
         // Start 60 Hz game loop
         _timer = new PeriodicTimer(TimeSpan.FromMilliseconds(1000.0 / 60.0));
         _ = RunGameLoopAsync(_cts.Token);
@@ -122,8 +150,6 @@
         // Give the container focus so keyboard events work
         await JS.InvokeVoidAsync("focusElement", _containerRef);
     }
-
-    [Inject] private IJSRuntime JS { get; set; } = default!;
 
     private async Task RunGameLoopAsync(CancellationToken ct)
     {
@@ -208,9 +234,58 @@
             if (_state.Phase is GamePhase.Menu or GamePhase.GameOver or GamePhase.Victory)
                 _engine?.StartGame(_state);
         }
+        else if (_state.Phase == GamePhase.Menu)
+        {
+            if (e.Key is "ArrowLeft")  _ = CycleModeBackAsync();
+            if (e.Key is "ArrowRight") _ = CycleModeForwardAsync();
+        }
     }
 
     private void OnKeyUp(KeyboardEventArgs e) => _input.OnKeyUp(e.Key);
+
+    // ── Mode cycling ──────────────────────────────────────────────────────
+
+    private string GetModeName()
+    {
+        if (_state.Mode == GameMode.Custom)
+            return _state.ActiveMap is not null ? _state.ActiveMap.Name : "Custom";
+        return MapRegistry.Get(_state.Mode).Name;
+    }
+
+    private void CycleModeBack()    => _ = CycleModeBackAsync();
+    private void CycleModeForward() => _ = CycleModeForwardAsync();
+
+    private async Task CycleModeBackAsync()
+    {
+        int idx = Array.IndexOf(AllModes, _state.Mode);
+        _state.Mode = AllModes[(idx - 1 + AllModes.Length) % AllModes.Length];
+        await OnModeChangedAsync();
+    }
+
+    private async Task CycleModeForwardAsync()
+    {
+        int idx = Array.IndexOf(AllModes, _state.Mode);
+        _state.Mode = AllModes[(idx + 1) % AllModes.Length];
+        await OnModeChangedAsync();
+    }
+
+    private async Task OnModeChangedAsync()
+    {
+        if (_state.Mode == GameMode.Custom)
+            await SwitchToCustomModeAsync();
+        else
+            _state.ActiveMap = null;  // will be loaded fresh at StartGame
+        await InvokeAsync(StateHasChanged);
+    }
+
+    /// <summary>Load the stored active custom map into state.</summary>
+    private async Task SwitchToCustomModeAsync()
+    {
+        _state.Mode = GameMode.Custom;
+        var map = await MapStorage.LoadActiveMapAsync();
+        if (map is not null)
+            _state.ActiveMap = map;
+    }
 
     // ── Inspector ─────────────────────────────────────────────────────────
 

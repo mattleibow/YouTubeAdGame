@@ -16,7 +16,7 @@ public sealed record GateDefinition
     /// Inclusive range for the randomized operand.
     /// A random value in [Min, Max] is chosen at spawn time.
     /// </summary>
-    public (int Min, int Max) OperandRange { get; init; }
+    public OperandRange OperandRange { get; init; } = new(0, 0);
 
     /// <summary>How the gate moves through the world.</summary>
     public GateMovement MovementStyle { get; init; } = GateMovement.FastScroll;

@@ -9,10 +9,10 @@ public sealed record MapDefinition
 {
     // ── Identity ────────────────────────────────────────────────────────────
     /// <summary>Display name shown on the menu.</summary>
-    public required string Name { get; init; }
+    public string Name { get; init; } = "";
 
     /// <summary>Short description shown on the menu.</summary>
-    public required string Description { get; init; }
+    public string Description { get; init; } = "";
 
     // ── Road / lanes ────────────────────────────────────────────────────────
     /// <summary>Number of lanes on the road.</summary>

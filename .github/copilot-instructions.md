@@ -22,13 +22,30 @@ The player commands a **crowd of soldiers** marching down the road toward an end
 
 ### Game Modes
 
-The main menu shows the available game mode(s). Each mode is defined by a `MapDefinition` in `Maps/MapRegistry.cs` — a data-driven record that configures all gameplay parameters, gate palettes, power-up palettes, and wave scripting. The `GameMode` enum in `Core/GameMode.cs` identifies modes; `MapRegistry.Get(GameMode)` returns the full `MapDefinition`.
+The main menu shows all available game modes. Use the **< >** arrows in the inspector panel (or ← → keyboard keys on the menu screen) to cycle through modes. Each mode is defined by a `MapDefinition` in `Maps/MapRegistry.cs`. `MapRegistry.GetAll()` returns the ordered list of built-in modes.
 
 | Mode | Lanes | Gate speed | Bullet speed | Notes |
 |------|-------|-----------|-------------|-------|
-| **Horde Runner** | 3 | 150 depth/s (3× zombie speed) | 1400 | Default. Vast zombie hordes, fast gates to build army |
+| **Horde Runner** | 3 | 150 depth/s | 1400 | Default. Vast zombie hordes, fast gates |
+| **Blitz** | 3 | 200 depth/s | 1680 | 80% faster enemies, 60 ms spawn interval, rapid power-ups |
+| **Survival** | 3 | 120 depth/s | 1400 | Starts slow but enemy speed multiplies every wave |
+| **Custom** | any | configurable | configurable | Fully user-defined via the Map Editor |
 
-New modes are added by: (1) extending `GameMode` enum, (2) adding a `MapDefinition` to `MapRegistry`. No engine/spawn/renderer changes required.
+New built-in modes are added by: (1) extending `GameMode` enum, (2) adding a `MapDefinition` property to `MapRegistry`, (3) including it in `GetAll()`. No engine/spawn/renderer changes required.
+
+### Custom Mode & Map Editor
+
+A full in-browser **Map Editor** is accessible from the inspector panel ("Edit Custom Map" link) or by navigating to `/editor`. It covers every configurable aspect of a `MapDefinition`:
+
+- **Basic Settings** — name, description, road config, player speed/bullet/fire-rate, enemy tuning, gate tuning, power-up interval
+- **Gates tab** — full palette editor: add/remove gates, set operation, operand range, movement style, on-shot behaviour, wave filters, spawn weight
+- **Power-Ups tab** — full palette editor: add/remove power-ups, set type, duration, concrete wrapping, wave filters
+- **Import/Export tab** — download JSON, paste/import JSON, manage named saves, set active map
+
+Saved maps are stored in browser **localStorage** under keys prefixed `crowdrunner_`. The active custom map is at `crowdrunner_active_custom`. The `CustomMapService` (Web) wraps all JS interop; `MapSerializer` (Engine) handles JSON serialization using `System.Text.Json` with string enum names.
+
+When the user selects **Custom** mode and starts a game, `GameEngine.StartGame` preserves the pre-loaded `state.ActiveMap` instead of overwriting it with a registry map.
+
 
 ### Data-Driven Map System
 
@@ -218,7 +235,7 @@ This means you can preview any PR branch on GitHub Pages simply by adding the `d
 |------|---------|
 | `Core/GameConstants.cs` | All tuning constants (default values) |
 | `Core/GameState.cs` | All mutable runtime state, including runtime-adjustable tuning properties |
-| `Core/GameMode.cs` | Game mode enum — defines available gameplay modes |
+| `Core/GameMode.cs` | Game mode enum — HordeRunner, Blitz, Survival, Custom |
 | `Core/IInputProvider.cs` | Input abstraction + `InputState` |
 | `Core/IRenderer.cs` | Rendering abstraction |
 | `Math/Camera.cs` | Pseudo-3D projection math |
@@ -228,14 +245,19 @@ This means you can preview any PR branch on GitHub Pages simply by adding the `d
 | `Maps/GateDefinition.cs` | Gate behavior template (movement, on-shot, open/closed) |
 | `Maps/PowerUpDefinition.cs` | Power-up behavior template (type, duration, blocked, on-shot) |
 | `Maps/WaveDefinition.cs` | Per-wave tuning overrides |
-| `Maps/MapRegistry.cs` | Factory mapping `GameMode` → `MapDefinition` |
+| `Maps/OperandRange.cs` | Serializable integer range replacing value-tuple |
+| `Maps/MapRegistry.cs` | Factory: `GameMode` → `MapDefinition`; `GetAll()` for all built-in modes |
+| `Maps/MapSerializer.cs` | JSON serialization/deserialization for `MapDefinition` |
 | `Objects/Gate.cs` | Runtime gate object with data-driven behaviour properties |
 | `Objects/PowerUp.cs` | Collectable power-up (optionally wrapped in concrete block) |
 | `Effects/ActiveEffect.cs` | Time-limited player buff (shield, rapid fire, etc.) |
 | `Rendering/SkiaGameRenderer.cs` | Full scene rendering |
-| `Components/GameCanvas.razor` | 60 Hz loop, SKCanvasView wiring, debug inspector panel |
+| `Components/GameCanvas.razor` | 60 Hz loop, SKCanvasView wiring, debug inspector panel, mode cycling |
+| `Pages/MapEditorPage.razor` | Full custom-map editor at `/editor` route |
+| `Services/CustomMapService.cs` | Browser localStorage persistence for custom maps |
 | `Input/BlazorInputProvider.cs` | Browser input → `IInputProvider` |
-| `wwwroot/css/app.css` | Global styles including `.page-layout` and `.inspector-panel` |
+| `wwwroot/css/app.css` | Global styles including editor page styles |
+| `wwwroot/js/storage.js` | JS localStorage helpers + JSON download trigger |
 | `.github/workflows/deploy.yml` | CI build + conditional GitHub Pages deploy |
 
 ## Build & Run
