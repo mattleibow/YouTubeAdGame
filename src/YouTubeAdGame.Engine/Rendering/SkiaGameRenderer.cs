@@ -409,7 +409,7 @@ public sealed class SkiaGameRenderer : IRenderer
         var sorted = state.Enemies.OrderByDescending(e => e.Depth);
         foreach (var enemy in sorted)
         {
-            var (sx, sy, scale) = camera.Project(enemy.WorldX, enemy.Depth);
+            var (sx, sy, scale) = camera.Project(enemy.WorldPos);
             float r = GameConstants.CrowdMemberRadius * scale;
 
             // Shadow
@@ -431,7 +431,7 @@ public sealed class SkiaGameRenderer : IRenderer
     {
         foreach (var b in state.PlayerBullets)
         {
-            var (sx, sy, scale) = camera.Project(b.WorldX, b.Depth);
+            var (sx, sy, scale) = camera.Project(b.WorldPos);
             float r = b.Radius * scale;
             _fillPaint.Color = ColBulletP;
             canvas.DrawOval(sx, sy, r, r * 2.5f, _fillPaint);
@@ -442,7 +442,7 @@ public sealed class SkiaGameRenderer : IRenderer
     {
         foreach (var b in state.EnemyBullets)
         {
-            var (sx, sy, scale) = camera.Project(b.WorldX, b.Depth);
+            var (sx, sy, scale) = camera.Project(b.WorldPos);
             float r = b.Radius * scale;
             _fillPaint.Color = ColBulletE;
             canvas.DrawOval(sx, sy, r, r * 2.5f, _fillPaint);

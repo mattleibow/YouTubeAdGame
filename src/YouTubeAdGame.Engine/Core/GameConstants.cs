@@ -54,7 +54,7 @@ public static class GameConstants
     // Gate
     public const float GateWidth = 190f;    // visual width — fills a full lane
     public const float GateCollisionRadius = 80f;  // collision radius (< LaneWidth/2 − PlayerRadius to prevent cross-lane overlap)
-    public const float GateHeight = 60f;
+    public const float GateHeight = 25f;
     public const float GateDepth = 20f;     // world-depth size
     public const float GateScrollSpeed = 150f;  // depth-units / second — much faster than zombies
 

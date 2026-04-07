@@ -64,10 +64,11 @@ public sealed class Crowd
 
     /// <summary>
     /// Blob radius scales so area is proportional to soldier count:
-    /// r = spacing * sqrt(count), giving each soldier ~1 "area unit".
+    /// r = spacing * sqrt(count), where spacing ≈ 1.05 gives ~1 soldier per unit area
+    /// (tight hexagonal packing with ~1 unit gap between soldiers).
     /// </summary>
     public static float BlobRadius(int count) =>
-        System.MathF.Sqrt(System.Math.Max(1, count)) * Core.GameConstants.CrowdMemberRadius * 1.8f;
+        System.MathF.Sqrt(System.Math.Max(1, count)) * Core.GameConstants.CrowdMemberRadius * 1.05f;
 
     // ── Seed management ─────────────────────────────────────────────────────
 
@@ -94,7 +95,7 @@ public sealed class Crowd
             float r     = (i == 0) ? 0f : System.MathF.Sqrt((float)i / needed);
             float angle = i * goldenAngle;
             _memberNormX[i] = r * System.MathF.Cos(angle);
-            _memberNormZ[i] = r * System.MathF.Sin(angle) * 0.5f; // squash Z so blob sits flat
+            _memberNormZ[i] = r * System.MathF.Sin(angle) * 0.08f; // nearly flat — minimal depth spread
         }
     }
 }
