@@ -115,20 +115,20 @@ public sealed class GameEngine(IInputProvider input)
 
     private static void FirePlayerBullets(GameState state)
     {
-        // More crowd members = more bullets, spread across the formation width.
-        // Gun level acts as a density multiplier (gate reward).
-        int baseBullets = System.Math.Max(1, state.Crowd.Count / 5);
-        float densityMul = 1f + state.Player.GunLevel * 0.5f;
-        int count = System.Math.Min((int)(baseBullets * densityMul), 50);
+        // Each soldier fires one bullet from their own world position.
+        // Gun level adds extra bullets per soldier (burst fire).
+        int shotsPerSoldier = 1 + state.Player.GunLevel;
 
-        float spreadHalf = GameConstants.CrowdHalfWidth;
-        float depth = state.Player.Depth;
-
-        for (int i = 0; i < count; i++)
+        int totalBullets = 0;
+        foreach (var (wx, depth) in state.Crowd.GetMemberPositions(state.Player.WorldX, state.Player.Depth))
         {
-            float t = count == 1 ? 0.5f : (float)i / (count - 1);
-            float worldX = state.Player.WorldX + (t * 2f - 1f) * spreadHalf;
-            state.PlayerBullets.Add(new Bullet(BulletOwner.Player, worldX, depth, GameConstants.BulletSpeed));
+            for (int s = 0; s < shotsPerSoldier; s++)
+            {
+                if (totalBullets >= 200) break;  // hard cap to avoid lag with huge crowds
+                state.PlayerBullets.Add(new Bullet(BulletOwner.Player, wx, depth, GameConstants.BulletSpeed));
+                totalBullets++;
+            }
+            if (totalBullets >= 200) break;
         }
     }
 

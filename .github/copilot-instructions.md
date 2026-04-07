@@ -155,15 +155,16 @@ Subtract gates appear only when the crowd is large enough (≥10 in mid/late gam
 
 ### Crowd-Based Firing & Collision
 
-The player's soldiers fire automatically every `PlayerFireRate` seconds. Bullet count scales with crowd size:
+The player's soldiers fire automatically every `PlayerFireRate` seconds. Each visible soldier fires one bullet from their own world position:
 
 ```
-count = min(Crowd.Count / 5 × (1 + GunLevel × 0.5), 50)
+shotsPerSoldier = 1 + GunLevel   (burst fire per soldier)
+totalBullets    = min(visible soldiers × shotsPerSoldier, 200)
 ```
 
-Bullets are spread uniformly across `±CrowdHalfWidth` world-units centred on the player. Gun-level gates increase bullet density. There are **no enemy bullets** — zombies only move.
+Bullets originate from each soldier's individual position in the crowd formation. Gun-level gates increase shots per soldier (burst fire). There are **no enemy bullets** — zombies only move.
 
-**Bullet–zombie collision:** each bullet is consumed on the first hit (one bullet kills one zombie). Bullets do **not** pass through enemies. Killing a zombie awards score points but does **not** add soldiers — the only way to gain soldiers is through gates.
+**Bullet–zombie collision:** each bullet is consumed on the first hit (one bullet kills one zombie). Bullets normally do **not** pass through enemies, but the `BulletPierce` power-up allows bullets to pierce through multiple enemies. Killing a zombie awards score points but does **not** add soldiers — the only way to gain soldiers is through gates.
 
 ### Player / Crowd Boundary
 
